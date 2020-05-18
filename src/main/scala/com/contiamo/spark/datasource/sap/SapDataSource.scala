@@ -5,7 +5,5 @@ import org.apache.spark.sql.sources.v2.{DataSourceOptions, DataSourceV2, ReadSup
 
 class SapDataSource extends DataSourceV2 with ReadSupport {
   override def createReader(options: DataSourceOptions): DataSourceReader =
-    new SapDataSourceReader(
-      options.get("mockdata").get()
-    )
+    new SapDataSourceReader(options)
 }
