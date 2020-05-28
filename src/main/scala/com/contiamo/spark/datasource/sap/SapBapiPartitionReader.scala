@@ -56,7 +56,7 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
       } else None
     }
 
-  private val fun = Option(dest.getRepository.getFunction(partition.funName)).get
+  private val fun = Option(dest.getRepository.getFunction(partition.funName.toUpperCase)).get
   private val output = extractTableOutput.orElse(extractExportOutput)
 
   override val schema: StructType =
@@ -69,19 +69,18 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
   if (!schemaOnly) {
     val imports =
       Option(fun.getImportParameterList).get
-    val importsIter =
-      imports.getParameterFieldIterator
-    
-    while (importsIter.hasNextField) {
-      val field = importsIter.nextParameterField()
-      partition.bapiArgs.get(field.getName.toUpperCase).foreach {
-        case JString(v)   => field.setValue(v)
-        case JInt(v)      => field.setValue(v)
-        case JLong(v)     => field.setValue(v)
-        case JBool(true)  => field.setValue('X')
-        case JBool(false) => field.setValue(' ')
-        case JDouble(v)   => field.setValue(v)
-      }
+
+    partition.bapiArgs.foreach {
+      case (param, jsonValue) =>
+        val paramName = param.toUpperCase
+        jsonValue match {
+          case JString(v)   => imports.setValue(paramName, v)
+          case JInt(v)      => imports.setValue(paramName, v)
+          case JLong(v)     => imports.setValue(paramName, v)
+          case JBool(true)  => imports.setValue(paramName, 'X')
+          case JBool(false) => imports.setValue(paramName, ' ')
+          case JDouble(v)   => imports.setValue(paramName, v)
+        }
     }
 
     fun.execute(dest)

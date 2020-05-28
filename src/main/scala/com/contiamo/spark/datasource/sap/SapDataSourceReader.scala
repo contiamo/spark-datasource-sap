@@ -79,7 +79,7 @@ object SapDataSourceReader {
         val bapiArgsStr = options.getOrElse(SapDataSource.BAPI_ARGS_KEY, "{}")
         parse(bapiArgsStr) match {
           case JObject(args) =>
-            Some((bapiName.toUpperCase, args.toMap))
+            Some((bapiName, args.toMap))
           case _ => None
         }
       }

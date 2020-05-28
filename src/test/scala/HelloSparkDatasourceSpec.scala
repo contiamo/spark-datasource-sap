@@ -33,7 +33,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
       baseDF
         .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
         .option(SapDataSource.BAPI_ARGS_KEY, "{\"username\":\"" + username + "\"}")
-        .option(SapDataSource.BAPI_OUTPUT_KEY, "IDENTITY")
+        .option(SapDataSource.BAPI_OUTPUT_KEY, "LASTMODIFIED")
         .load()
 
     sourceDF.printSchema()
