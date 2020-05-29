@@ -7,6 +7,7 @@ import scala.language.postfixOps
 import com.contiamo.spark.datasource.sap.SapDataSource
 
 class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
+  import spark.implicits._
 
   val jcoOptions = Map.empty[String, String]
 
@@ -25,7 +26,12 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
     val expectedCols = Seq("MANDT", "LANGU", "BNAME")
     sourceDF.schema.fields must contain allElementsOf expectedCols.map(col => StructField(col, StringType))
 
+    sourceDF.collect().map(_.mkString).mkString must include(username)
+
     sourceDF.select("BNAME").collect().map(_.mkString) must contain(username)
+
+    // not using sparkCount to force pushdown of both columns
+    sourceDF.select("MANDT").where($"BNAME" === username).collectAsList().size() mustBe 1
   }
 
   it("calls BAPI_USER_GET_DETAIL and retrieves its result set") {
