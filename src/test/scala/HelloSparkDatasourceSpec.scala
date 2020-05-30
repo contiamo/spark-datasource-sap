@@ -34,49 +34,127 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
     sourceDF.select("BNAME").collect().map(_.mkString) must contain(username)
 
     // not using sparkCount to force pushdown of both columns
-    sourceDF.select("MANDT").where($"BNAME" === username).collectAsList().size() mustBe 1
+    // TODO assert pushdown
+    sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
   }
 
-  def flattenSchema(schema: StructType, prefix: String = null): Array[Column] =
+  private def flattenSchema(schema: StructType, prefix: String = null): Array[Column] =
     schema.fields.flatMap { f =>
       val colName =
         if (prefix == null) f.name
         else (prefix + "." + f.name)
 
-      val colAlias = colName.replaceAll("\\.", "_")
-
       f.dataType match {
         case st: StructType => flattenSchema(st, colName)
-        case _              => Array(col(colName).alias(colAlias))
+        case _              => Array(col(colName).alias(colName))
       }
     }
 
-  it("calls BAPI_USER_GET_DETAIL and retrieves its result set") {
-    val sourceDF =
-      baseDF
-        .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
-        .option(SapDataSource.BAPI_ARGS_KEY, "{\"username\":\"" + username + "\"}")
-        //option(SapDataSource.BAPI_OUTPUT_KEY, "PROFILES")
-        .load()
-
-    val df1 = sourceDF.select(flattenSchema(sourceDF.schema):_*)
-    df1.printSchema
-    df1.collect().foreach(r => println(r.toString()))
-  }
-
-  it("calls STFC_CONNECTION and retrieves its result set") {
+  it("calls STFC_CONNECTION and retrieves its export parameters") {
     val sourceDF =
       baseDF
         .option(SapDataSource.BAPI_KEY, "STFC_CONNECTION")
         .option(SapDataSource.BAPI_ARGS_KEY, "{\"REQUTEXT\":\"hello " + username + "\"}")
         .load()
 
-    sourceDF.printSchema()
-    sourceDF.collect().foreach(r => println(r.toString()))
+    val res = sourceDF.collect()
+    res.length mustEqual 1
+    res.head.schema.fieldNames must contain allElementsOf Seq("ECHOTEXT", "ECHOTEXT")
+    res.head.length mustEqual 2
+    res.head.get(0) mustEqual s"hello $username"
+  }
+
+  it("calls BAPI_USER_GET_DETAIL and retrieves its export parameters") {
+    val sourceDF =
+      baseDF
+        .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
+        .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + username + "\"}")
+        .load()
+
+    val expectedCols = Seq(
+      "ADDRESS",
+      "ADMINDATA",
+      "ALIAS",
+      "COMPANY",
+      "DEFAULTS",
+      "IDENTITY",
+      "ISLOCKED",
+      "LASTMODIFIED",
+      "LOGONDATA",
+      "REF_USER"
+    )
+
+    val expectedSubCols = Seq(
+      "LASTMODIFIED.MODDATE",
+      "LASTMODIFIED.MODTIME",
+      "ADDRESS.FIRSTNAME",
+      "ADDRESS.LASTNAME"
+    )
+
+    val bapiSchema = sourceDF.schema
+    bapiSchema.fields.map(_.name) must contain allElementsOf expectedCols
+    val flatDf = sourceDF.select(flattenSchema(bapiSchema): _*)
+
+    // we can't quite control what's in the output
+    // but we can assert that the result is non-trivial
+    val res = flatDf.collect()
+    res.length mustBe 1
+    res.head.mkString("") must not equal ("")
+
+    val flatSchema = res.head.schema
+    // assert that the reuslt set contains fields of non-trivial types
+    // .collect() forces us do deserialize those values
+    flatSchema.fields.map(_.dataType).count(_ != StringType) mustBe >(0)
+    flatSchema.fields.map(_.name) must contain allElementsOf expectedSubCols
+
+  }
+
+  it("calls BAPI_USER_GET_DETAIL and retrieves a subset of export parameters") {
+    val sourceDF =
+      baseDF
+        .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
+        .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + username + "\"}")
+        .load()
+
+    val expectedCols = Seq("ADDRESS", "LASTMODIFIED")
+
+    val expectedSubCols = Seq(
+      "LASTMODIFIED.MODDATE",
+      "LASTMODIFIED.MODTIME",
+      "ADDRESS.FIRSTNAME",
+      "ADDRESS.LASTNAME"
+    )
+
+    val fullResStr = sourceDF.collect().head.mkString
+
+    for (expCols <- Seq(expectedCols, expectedSubCols)) {
+      val subsetDF = sourceDF.select(expCols.map(c => col(c).alias(c)): _*)
+      val res = subsetDF.collect()
+
+      res.length mustBe 1
+      res.head.schema.fieldNames must contain theSameElementsAs expCols
+      res.head.schema.fieldNames.foreach { fn =>
+        fullResStr must include(res.head.getAs[Any](fn).toString)
+      }
+    }
+  }
+
+  it("calls BAPI_USER_GET_DETAIL and retrieves its table parameter") {
+    val sourceDF =
+      baseDF
+        .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
+        .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + username + "\"}")
+        .option(SapDataSource.BAPI_OUTPUT_KEY, "PROFILES")
+        .load()
+
+    val expectedCols = Seq("BAPIPROF", "BAPIPTEXT", "BAPITYPE", "BAPIAKTPS")
+
+    val res = sourceDF.collect()
+    res.length mustBe >=(1)
+    res.head.schema.fields.map(_.name) must contain allElementsOf expectedCols
   }
 
   /* TODO don't forget to test
     - multiple table
-    - different field types
  */
 }
