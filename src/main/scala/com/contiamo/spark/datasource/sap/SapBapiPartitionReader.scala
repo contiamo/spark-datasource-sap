@@ -2,7 +2,7 @@ package com.contiamo.spark.datasource.sap
 
 import java.time.{LocalDate, LocalDateTime, ZoneOffset}
 
-import com.sap.conn.jco.{JCoMetaData, JCoRecord}
+import com.sap.conn.jco.{JCoMetaData, JCoParameterList, JCoRecord}
 
 import scala.util.chaining._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -24,8 +24,27 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
   private def extractExportOutput: Option[OutputSrc] =
     Option(fun.getExportParameterList)
       .map { exports =>
+        applyPartialProjectionPushdown(exports)
         OutputSrc(Iterator.apply(exports), exports.getMetaData)
       }
+
+  /* Partial pushdown for export parameters.
+
+     Setting an export parameter as inactive
+     prevents it from being fetched from a server.
+     Additionally `readRecord` calls `isInitialized`
+     on every field checking whether it needs to be
+     deserialized.
+   */
+  private def applyPartialProjectionPushdown(exports: JCoParameterList): Unit =
+    partition.requiredColumns.foreach { cols =>
+      val requitedFieldNames = cols.fieldNames
+      val meta = exports.getListMetaData
+      0.until(meta.getFieldCount).foreach { fidx =>
+        val required = requitedFieldNames.contains(meta.getName(fidx))
+        exports.setActive(fidx, required)
+      }
+    }
 
   private def extractTableOutput: Option[OutputSrc] =
     Option(fun.getTableParameterList).flatMap { tables =>
@@ -82,7 +101,7 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
   def readRecord(rec: JCoRecord, schema: StructType, outRec: SpecificInternalRow): Unit = {
     for ((field, idx) <- schema.fields.zipWithIndex) {
       field.hashCode()
-      if (rec.getValue(idx) != null) {
+      if (rec.isInitialized(idx) && rec.getValue(idx) != null) {
         val anyval = field.dataType match {
           case IntegerType =>
             rec.getInt(idx)

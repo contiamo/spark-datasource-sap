@@ -50,6 +50,7 @@ object SapDataSourceReader {
   case class BapiPartition(funName: String,
                            bapiArgs: Map[String, JValue],
                            bapiOutput: String,
+                           requiredColumns: Option[StructType],
                            jcoOptions: Map[String, String])
       extends SapInputPartition {
     override def createPartitionReader(): InputPartitionReader[InternalRow] = new SapBapiPartitionReader(this)
@@ -67,9 +68,8 @@ object SapDataSourceReader {
       .toMap
   }
 
-  protected def createTablePartitions(
-      options: OptionsMap,
-      requiredColumns: Option[StructType]): Option[PartitionsInfo] = {
+  protected def createTablePartitions(options: OptionsMap,
+                                      requiredColumns: Option[StructType]): Option[PartitionsInfo] = {
     val jcoOptions = extractJcoOptions(options)
 
     options.get(SapDataSource.TABLE_KEY).map { tableName =>
@@ -80,7 +80,8 @@ object SapDataSourceReader {
     }
   }
 
-  protected def createBapiPartitions(options: OptionsMap): Option[PartitionsInfo] = {
+  protected def createBapiPartitions(options: OptionsMap,
+                                     requiredColumns: Option[StructType]): Option[PartitionsInfo] = {
     val jcoOptions = extractJcoOptions(options)
 
     import org.json4s.jackson.JsonMethods._
@@ -98,14 +99,13 @@ object SapDataSourceReader {
       .map {
         case (bapiName, bapiArgs) =>
           val bapiOutput = options.getOrElse(SapDataSource.BAPI_OUTPUT_KEY, "")
-          val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, jcoOptions)
+          val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, requiredColumns, jcoOptions)
           val schemaReader = new SapBapiPartitionReader(partition, true)
 
           PartitionsInfo(schemaReader, Seq(partition))
       }
   }
 
-  def createPartitions(options: OptionsMap,
-                       requiredColumns: Option[StructType]): PartitionsInfo =
-    createTablePartitions(options, requiredColumns).orElse(createBapiPartitions(options)).get
+  def createPartitions(options: OptionsMap, requiredColumns: Option[StructType]): PartitionsInfo =
+    createTablePartitions(options, requiredColumns).orElse(createBapiPartitions(options, requiredColumns)).get
 }
