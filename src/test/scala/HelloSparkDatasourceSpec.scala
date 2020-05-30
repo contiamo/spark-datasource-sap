@@ -5,15 +5,18 @@ import org.scalatest.matchers.must
 
 import scala.language.postfixOps
 import com.contiamo.spark.datasource.sap.SapDataSource
+import org.apache.spark.sql.Column
 
 class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
   import spark.implicits._
+  import org.apache.spark.sql.functions.col
 
   val jcoOptions = Map.empty[String, String]
 
-  def baseDF = spark.read
-    .format("com.contiamo.spark.datasource.sap.SapDataSource")
-    .options(jcoOptions)
+  def baseDF =
+    spark.read
+      .format("com.contiamo.spark.datasource.sap.SapDataSource")
+      .options(jcoOptions)
 
   val username = jcoOptions("client.user")
 
@@ -34,17 +37,31 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
     sourceDF.select("MANDT").where($"BNAME" === username).collectAsList().size() mustBe 1
   }
 
+  def flattenSchema(schema: StructType, prefix: String = null): Array[Column] =
+    schema.fields.flatMap { f =>
+      val colName =
+        if (prefix == null) f.name
+        else (prefix + "." + f.name)
+
+      val colAlias = colName.replaceAll("\\.", "_")
+
+      f.dataType match {
+        case st: StructType => flattenSchema(st, colName)
+        case _              => Array(col(colName).alias(colAlias))
+      }
+    }
+
   it("calls BAPI_USER_GET_DETAIL and retrieves its result set") {
     val sourceDF =
       baseDF
         .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
         .option(SapDataSource.BAPI_ARGS_KEY, "{\"username\":\"" + username + "\"}")
-        .option(SapDataSource.BAPI_OUTPUT_KEY, "LASTMODIFIED")
+        //option(SapDataSource.BAPI_OUTPUT_KEY, "PROFILES")
         .load()
 
-    sourceDF.printSchema()
-    sourceDF.collect().foreach(r => println(r.toString()))
-
+    val df1 = sourceDF.select(flattenSchema(sourceDF.schema):_*)
+    df1.printSchema
+    df1.collect().foreach(r => println(r.toString()))
   }
 
   it("calls STFC_CONNECTION and retrieves its result set") {
@@ -52,7 +69,6 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
       baseDF
         .option(SapDataSource.BAPI_KEY, "STFC_CONNECTION")
         .option(SapDataSource.BAPI_ARGS_KEY, "{\"REQUTEXT\":\"hello " + username + "\"}")
-        .option(SapDataSource.BAPI_OUTPUT_KEY, "ECHOTEXT")
         .load()
 
     sourceDF.printSchema()

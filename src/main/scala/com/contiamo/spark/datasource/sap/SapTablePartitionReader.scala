@@ -20,7 +20,7 @@ class SapTablePartitionReader(partition: SapDataSourceReader.TablePartition)
 
   private val currentRow = new SpecificInternalRow(schema)
   private val data = tables.getTable("DATA")
-  
+
   data.firstRow()
 
   override def next(): Boolean = data.nextRow()

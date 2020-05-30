@@ -27,7 +27,11 @@ package object sap {
   def sapMetaDataToSparkSchema(meta: JCoMetaData): StructType =
     0.until(meta.getFieldCount)
       .map { i =>
-        val sparkType = sapToSparkType(meta.getType(i), meta.getDecimals(i))
+        val sparkType =
+          if (meta.isStructure(i))
+            sapMetaDataToSparkSchema(meta.getRecordMetaData(i))
+          else
+            sapToSparkType(meta.getType(i), meta.getDecimals(i))
         StructField(meta.getName(i), sparkType)
       }
       .pipe(StructType.apply)

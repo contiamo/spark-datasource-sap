@@ -12,7 +12,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JString}
 
-import scala.collection.AbstractIterator
+import scala.collection.{AbstractIterator, mutable}
 
 class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schemaOnly: Boolean = false)
     extends SapSchemaReader
@@ -23,18 +23,8 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
 
   private def extractExportOutput: Option[OutputSrc] =
     Option(fun.getExportParameterList)
-      .flatMap { exportFields =>
-        val hasField = exportFields.getListMetaData.hasField(partition.bapiOutput)
-        val isStruct = exportFields.getListMetaData.isStructure(partition.bapiOutput)
-        val isTable = exportFields.getListMetaData.isTable(partition.bapiOutput)
-
-        if (hasField && isStruct) Option(exportFields.getStructure(partition.bapiOutput))
-        else if (hasField && isTable) Option(exportFields.getTable(partition.bapiOutput))
-        else if (hasField) Option(exportFields)
-        else Option(exportFields)
-      }
-      .map { src =>
-        OutputSrc(Iterator.apply(src), src.getMetaData)
+      .map { exports =>
+        OutputSrc(Iterator.apply(exports), exports.getMetaData)
       }
 
   private def extractTableOutput: Option[OutputSrc] =
@@ -56,7 +46,7 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
       } else None
     }
 
-  private val fun = Option(dest.getRepository.getFunction(partition.funName.toUpperCase)).get
+  private val fun = Option(dest.getRepository.getFunction(partition.funName)).get
   private val output = extractTableOutput.orElse(extractExportOutput)
 
   override val schema: StructType =
@@ -89,32 +79,46 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
   private val currentRow = new SpecificInternalRow(schema)
   private val data: Iterator[JCoRecord] = output.map(_.data).getOrElse(Iterator.empty)
 
+  def readRecord(rec: JCoRecord, schema: StructType, outRec: SpecificInternalRow): Unit = {
+    for ((field, idx) <- schema.fields.zipWithIndex) {
+      field.hashCode()
+      if (rec.getValue(idx) != null) {
+        val anyval = field.dataType match {
+          case IntegerType =>
+            rec.getInt(idx)
+          case DoubleType =>
+            rec.getDouble(idx)
+          case DateType =>
+            LocalDateTime.ofInstant(rec.getDate(idx).toInstant, ZoneOffset.UTC).toLocalDate.toEpochDay.toInt
+          case TimestampType =>
+            rec.getDate(idx).getTime
+          case BinaryType =>
+            rec.getByteArray(idx)
+          case StringType =>
+            UTF8String.fromBytes(rec.getString(idx).getBytes("UTF-8"))
+          case _decimal: DecimalType =>
+            Decimal.fromDecimal(rec.getBigDecimal(idx))
+          case struct: StructType =>
+            var outRec1 = outRec.get(idx, struct).asInstanceOf[SpecificInternalRow]
+            if (outRec1 == null)
+              outRec1 = new SpecificInternalRow(struct)
+
+            readRecord(rec.getStructure(idx), struct, outRec1)
+            outRec1
+        }
+        outRec.update(idx, anyval)
+      } else {
+        outRec.setNullAt(idx)
+      }
+    }
+  }
+
   override def next(): Boolean = {
     val hasNext = data.hasNext
 
     if (hasNext) {
       val rec = data.next
-      for ((field, idx) <- schema.fields.zipWithIndex) {
-        if (rec.getValue(idx) != null) {
-          val anyval = field.dataType match {
-            case IntegerType =>
-              rec.getInt(idx)
-            case DoubleType =>
-              rec.getDouble(idx)
-            case DateType =>
-              LocalDateTime.ofInstant(rec.getDate(idx).toInstant, ZoneOffset.UTC).toLocalDate.toEpochDay.toInt
-            case TimestampType =>
-              rec.getDate(idx).getTime
-            case BinaryType =>
-              rec.getByteArray(idx)
-            case StringType =>
-              UTF8String.fromBytes(rec.getString(idx).getBytes("UTF-8"))
-          }
-          currentRow.update(idx, anyval)
-        } else {
-          currentRow.setNullAt(idx)
-        }
-      }
+      readRecord(rec, schema, currentRow)
     }
 
     hasNext
