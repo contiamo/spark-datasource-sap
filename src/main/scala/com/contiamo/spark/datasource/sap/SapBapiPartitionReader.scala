@@ -1,7 +1,5 @@
 package com.contiamo.spark.datasource.sap
 
-import java.time.{LocalDate, LocalDateTime, ZoneOffset}
-
 import com.sap.conn.jco.{JCoMetaData, JCoParameterList, JCoRecord}
 
 import scala.util.chaining._
@@ -9,7 +7,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JString}
 
 import scala.collection.{AbstractIterator, mutable}
@@ -41,7 +38,11 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
       val requitedFieldNames = cols.fieldNames
       val meta = exports.getListMetaData
       0.until(meta.getFieldCount).foreach { fidx =>
-        val required = requitedFieldNames.contains(meta.getName(fidx))
+        val exportFieldName = meta.getName(fidx)
+        val required =
+          if (partition.bapiFlatten) requitedFieldNames.exists(_.startsWith(exportFieldName))
+          else requitedFieldNames.contains(exportFieldName)
+
         exports.setActive(fidx, required)
       }
     }
@@ -66,13 +67,15 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
     }
 
   private val fun = Option(dest.getRepository.getFunction(partition.funName)).get
-  private val output = extractTableOutput.orElse(extractExportOutput)
+  private val output = extractTableOutput.orElse(extractExportOutput).get
 
-  override val schema: StructType =
-    output
-      .map(_.schema)
-      .map(sapMetaDataToSparkSchema)
-      .getOrElse(StructType(Seq.empty))
+  private val pureSchema = sapMetaDataToSparkSchema(output.schema)
+  private val (readySchema, recordRemapping) =
+    if (partition.bapiFlatten)
+      flattenSparkSchema(pureSchema)
+    else (pureSchema, Map.empty: SchemaRemapping)
+
+  override val schema: StructType = readySchema
 
   // parse & bind input parameters, then execute the call
   if (!schemaOnly) {
@@ -83,6 +86,7 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
       case (param, jsonValue) =>
         val paramName = param.toUpperCase
         jsonValue match {
+          // TODO arrays and objects
           case JString(v)   => imports.setValue(paramName, v)
           case JInt(v)      => imports.setValue(paramName, v)
           case JLong(v)     => imports.setValue(paramName, v)
@@ -96,52 +100,21 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
   }
 
   private val currentRow = new SpecificInternalRow(schema)
-  private val data: Iterator[JCoRecord] = output.map(_.data).getOrElse(Iterator.empty)
-
-  def readRecord(rec: JCoRecord, schema: StructType, outRec: SpecificInternalRow): Unit = {
-    for ((field, idx) <- schema.fields.zipWithIndex) {
-      field.hashCode()
-      if (rec.isInitialized(idx) && rec.getValue(idx) != null) {
-        val anyval = field.dataType match {
-          case IntegerType =>
-            rec.getInt(idx)
-          case DoubleType =>
-            rec.getDouble(idx)
-          case DateType =>
-            LocalDateTime.ofInstant(rec.getDate(idx).toInstant, ZoneOffset.UTC).toLocalDate.toEpochDay.toInt
-          case TimestampType =>
-            rec.getDate(idx).getTime
-          case BinaryType =>
-            rec.getByteArray(idx)
-          case StringType =>
-            UTF8String.fromBytes(rec.getString(idx).getBytes("UTF-8"))
-          case _decimal: DecimalType =>
-            Decimal.fromDecimal(rec.getBigDecimal(idx))
-          case struct: StructType =>
-            var outRec1 = outRec.get(idx, struct).asInstanceOf[SpecificInternalRow]
-            if (outRec1 == null)
-              outRec1 = new SpecificInternalRow(struct)
-
-            readRecord(rec.getStructure(idx), struct, outRec1)
-            outRec1
-        }
-        outRec.update(idx, anyval)
-      } else {
-        outRec.setNullAt(idx)
-      }
-    }
-  }
+  private val data: Iterator[JCoRecord] = output.data
 
   override def next(): Boolean = {
     val hasNext = data.hasNext
 
     if (hasNext) {
       val rec = data.next
-      readRecord(rec, schema, currentRow)
+
+      if (partition.bapiFlatten) readRecordFlat(rec, recordRemapping, currentRow)
+      else readRecord(rec, schema, currentRow)
     }
 
     hasNext
   }
+
   override def get(): InternalRow = currentRow
   override def close(): Unit = {}
 }

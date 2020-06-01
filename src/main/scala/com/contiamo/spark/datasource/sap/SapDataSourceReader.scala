@@ -50,6 +50,7 @@ object SapDataSourceReader {
   case class BapiPartition(funName: String,
                            bapiArgs: Map[String, JValue],
                            bapiOutput: String,
+                           bapiFlatten: Boolean,
                            requiredColumns: Option[StructType],
                            jcoOptions: Map[String, String])
       extends SapInputPartition {
@@ -99,7 +100,8 @@ object SapDataSourceReader {
       .map {
         case (bapiName, bapiArgs) =>
           val bapiOutput = options.getOrElse(SapDataSource.BAPI_OUTPUT_KEY, "")
-          val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, requiredColumns, jcoOptions)
+          val bapiFlatten = options.getOrElse(SapDataSource.BAPI_FLATTEN_KEY, "") == "true"
+          val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, bapiFlatten, requiredColumns, jcoOptions)
           val schemaReader = new SapBapiPartitionReader(partition, true)
 
           PartitionsInfo(schemaReader, Seq(partition))

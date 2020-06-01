@@ -13,4 +13,5 @@ object SapDataSource {
   val BAPI_KEY = "bapi-name"
   val BAPI_ARGS_KEY = "bapi-args"
   val BAPI_OUTPUT_KEY = "bapi-output"
+  val BAPI_FLATTEN_KEY = "bapi-output-flatten"
 }
