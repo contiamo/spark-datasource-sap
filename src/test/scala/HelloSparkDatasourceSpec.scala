@@ -54,12 +54,10 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
     sourceDF.select("BNAME").collect().map(_.mkString) must contain(username)
 
     // not using spark.count to force pushdown of both columns
-    // TODO assert pushdown
     sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
   }
 
-  describe("BAPI") {
-
+  describe("BAPI partition reader") {
     it("calls STFC_CONNECTION and retrieves its export parameters") {
       val sourceDF =
         baseDF
@@ -74,8 +72,29 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
       res.head.get(0) mustEqual s"hello $username"
     }
 
-    describe("BAPI_USER_GET_DETAIL") {
-      it("calls BAPI_USER_GET_DETAIL and retrieves its export parameters") {
+    it("calls RFC_READ_TABLE on USR01 with FIELDS table parameter") {
+      val argsJson =
+        """{
+          | "QUERY_TABLE" : "USR01",
+          | "FIELDS" : [
+          |   {"FIELDNAME": "BNAME"}
+          | ]
+          |}
+          |""".stripMargin
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.BAPI_KEY, "RFC_READ_TABLE")
+          .option(SapDataSource.BAPI_ARGS_KEY, argsJson)
+          .option(SapDataSource.BAPI_OUTPUT_KEY, "DATA")
+          .load()
+
+      // if parameters were passed correctly then the result must contain usernames only
+      // otherwisw each elemen will be concatenation of columns and != username
+      sourceDF.collect().map(_.mkString) must contain(username)
+    }
+
+    describe("calls BAPI_USER_GET_DETAIL and") {
+      it("retrieves its export parameters") {
         val sourceDF = userGetDetailCall()
 
         val expectedCols = Seq(
@@ -115,7 +134,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
         flatSchema.fields.map(_.name) must contain allElementsOf expectedSubCols
       }
 
-      it("calls BAPI_USER_GET_DETAIL and retrieves a subset of export parameters") {
+      it("retrieves a subset of export parameters") {
         val sourceDF = userGetDetailCall()
 
         val expectedCols = Seq("ADDRESS", "LASTMODIFIED")
@@ -140,7 +159,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
         }
       }
 
-      it("calls BAPI_USER_GET_DETAIL and retrieves flattened export parameters") {
+      it("retrieves flattened export parameters") {
         val nestedDF = userGetDetailCall()
         val flattenedDF = userGetDetailCall(Map(SapDataSource.BAPI_FLATTEN_KEY -> "true"))
 
@@ -164,7 +183,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
         flatNestedRes mustEqual res
       }
 
-      it("calls BAPI_USER_GET_DETAIL and retrieves a subset of flattened export parameters") {
+      it("retrieves a subset of flattened export parameters") {
         val sourceDF = userGetDetailCall(Map(SapDataSource.BAPI_FLATTEN_KEY -> "true"))
 
         val expectedSubCols = Seq(
@@ -186,7 +205,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
         }
       }
 
-      it("calls BAPI_USER_GET_DETAIL and retrieves its table parameter") {
+      it("retrieves its table parameter") {
         val sourceDF = userGetDetailCall(Map(SapDataSource.BAPI_OUTPUT_KEY -> "PROFILES"))
 
         val expectedCols = Seq("BAPIPROF", "BAPIPTEXT", "BAPITYPE", "BAPIAKTPS")
@@ -201,5 +220,6 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
 
   /* TODO don't forget to test
     - multiple table
+    - assert projection pushdowns
  */
 }

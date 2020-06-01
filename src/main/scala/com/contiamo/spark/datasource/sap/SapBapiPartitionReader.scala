@@ -7,7 +7,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 import org.apache.spark.sql.types._
-import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JString}
+import org.json4s.JValue
+import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JObject, JString, JValue}
 
 import scala.collection.{AbstractIterator, mutable}
 
@@ -77,22 +78,39 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
 
   override val schema: StructType = readySchema
 
+  private def setAtomicParameterFromJson(rec: JCoRecord, paramName: String, jsonValue: JValue): Unit = {
+    jsonValue match {
+      case JString(v)   => rec.setValue(paramName, v)
+      case JInt(v)      => rec.setValue(paramName, v)
+      case JLong(v)     => rec.setValue(paramName, v)
+      case JBool(true)  => rec.setValue(paramName, 'X')
+      case JBool(false) => rec.setValue(paramName, ' ')
+      case JDouble(v)   => rec.setValue(paramName, v)
+      // TODO throw a proper "unsupported paramters format" exception
+    }
+  }
+
   // parse & bind input parameters, then execute the call
   if (!schemaOnly) {
-    val imports =
-      Option(fun.getImportParameterList).get
+    val imports = Option(fun.getImportParameterList).get
+    val tables = Option(fun.getTableParameterList)
 
     partition.bapiArgs.foreach {
       case (param, jsonValue) =>
         val paramName = param.toUpperCase
         jsonValue match {
-          // TODO arrays and objects
-          case JString(v)   => imports.setValue(paramName, v)
-          case JInt(v)      => imports.setValue(paramName, v)
-          case JLong(v)     => imports.setValue(paramName, v)
-          case JBool(true)  => imports.setValue(paramName, 'X')
-          case JBool(false) => imports.setValue(paramName, ' ')
-          case JDouble(v)   => imports.setValue(paramName, v)
+          case JArray(values) if tables.isDefined =>
+            val tab = tables.get.getTable(paramName)
+            values.foreach {
+              case JObject(fields) =>
+                tab.appendRow()
+                fields.foreach {
+                  case (subParamName, subParamValue)  =>
+                    setAtomicParameterFromJson(tab, subParamName.toUpperCase, subParamValue)
+                }
+            }
+          case _ =>
+            setAtomicParameterFromJson(imports, paramName, jsonValue)
         }
     }
 
