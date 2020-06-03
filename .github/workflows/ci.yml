@@ -17,8 +17,8 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
-    - name: Run tests
-      run: sbt test
+    - name: Run checks & tests
+      run: sbt scalafmtCheck test:scalafmtCheck test
       env:
         SAP_AHOST: ${{secrets.SAP_AHOST}}
         SAP_USER: ${{secrets.SAP_USER}}
