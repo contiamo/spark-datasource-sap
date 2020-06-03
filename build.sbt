@@ -14,6 +14,9 @@ publishTo := {
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
+fork := true
+javaOptions += s"-Djava.library.path=${unmanagedBase.value}"
+
 libraryDependencies ++= {
   val sparkVersion = "2.4.4"
   Seq(
