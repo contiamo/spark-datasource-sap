@@ -4,10 +4,13 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must
 
 import scala.language.postfixOps
-import com.contiamo.spark.datasource.sap.SapDataSource
+import com.contiamo.spark.datasource.sap.{SapDataSource, SapDataSourceReader, SapSparkDestinationDataProvider}
+import com.sap.conn.jco.JCoDestinationManager
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Column
+
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
   import spark.implicits._
@@ -16,6 +19,13 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
   private val jcoClienConf = conf.getConfig("client")
   private val jcoOptions = jcoClienConf.root.keySet.asScala.map(k => s"client.$k" -> jcoClienConf.getString(k)).toMap
+
+  /* warm-up JCo connection in case the SAP system needs
+     time before its starts accepting connections.
+   */
+  private val jcoDestKey = SapSparkDestinationDataProvider.register(SapDataSourceReader.extractJcoOptions(jcoOptions))
+  private val jcoDest = JCoDestinationManager.getDestination(jcoDestKey)
+  Try(jcoDest.ping())
 
   def baseDF =
     spark.read
