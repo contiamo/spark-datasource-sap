@@ -17,9 +17,14 @@ class SapDataSourceReader(options: DataSourceOptions) extends DataSourceReader {
   import scala.util.chaining._
 
   private val sapOptions =
-    options.asMap().asScala.filterKeys(_ != "mockdata").map {
-      case (k, v) => (s"jco.client.$k", v)
-    }.toMap
+    options
+      .asMap()
+      .asScala
+      .filterKeys(_ != "mockdata")
+      .map {
+        case (k, v) => (s"jco.client.$k", v)
+      }
+      .toMap
 
   private val destKey = SapSparkDestinationDataProvider.register(sapOptions)
   private val dest = JCoDestinationManager.getDestination(destKey)
@@ -46,8 +51,7 @@ class SapDataSourceReader(options: DataSourceOptions) extends DataSourceReader {
 }
 
 object SapDataSourceReader {
-  class Partition(data: Array[Array[String]])
-      extends InputPartition[InternalRow] {
+  class Partition(data: Array[Array[String]]) extends InputPartition[InternalRow] {
     override def createPartitionReader(): InputPartitionReader[InternalRow] =
       new SapDataSourcePartitionReader(data)
   }

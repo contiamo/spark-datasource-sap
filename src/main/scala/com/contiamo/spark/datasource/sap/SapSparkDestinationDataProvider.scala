@@ -33,6 +33,6 @@ class SapSparkDestinationDataProvider extends DestinationDataProvider {
   override def supportsEvents(): Boolean = false
 
   override def setDestinationDataEventListener(
-    destinationDataEventListener: DestinationDataEventListener
+      destinationDataEventListener: DestinationDataEventListener
   ): Unit = {}
 }

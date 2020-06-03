@@ -4,11 +4,12 @@ import org.scalatest.matchers.must
 
 import scala.language.postfixOps
 
+
 class HelloSparkDatasourceSpec
     extends AnyFunSpec
     with SparkSessionTestWrapper
     with must.Matchers {
-
+  
   val sourceDF = spark.read
     .format("com.contiamo.spark.datasource.sap.SapDataSource")
     .option("mockdata", "foo,hello;bar,hello")

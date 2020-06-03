@@ -5,8 +5,7 @@ import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 
 import scala.collection.JavaConverters._
 
-class SapDataSourcePartitionReader(data: Array[Array[String]])
-    extends InputPartitionReader[InternalRow] {
+class SapDataSourcePartitionReader(data: Array[Array[String]]) extends InputPartitionReader[InternalRow] {
   import scala.util.chaining._
 
   private val iterator = data.toIterator.asJava
