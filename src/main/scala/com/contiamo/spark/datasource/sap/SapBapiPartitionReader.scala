@@ -105,7 +105,7 @@ class SapBapiPartitionReader(partition: SapDataSourceReader.BapiPartition, schem
               case JObject(fields) =>
                 tab.appendRow()
                 fields.foreach {
-                  case (subParamName, subParamValue)  =>
+                  case (subParamName, subParamValue) =>
                     setAtomicParameterFromJson(tab, subParamName.toUpperCase, subParamValue)
                 }
             }

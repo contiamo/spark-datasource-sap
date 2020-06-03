@@ -5,14 +5,18 @@ import org.scalatest.matchers.must
 
 import scala.language.postfixOps
 import com.contiamo.spark.datasource.sap.SapDataSource
+import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Column
+import scala.collection.JavaConverters._
 
 class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
 
   import spark.implicits._
   import org.apache.spark.sql.functions.col
 
-  val jcoOptions = Map.empty[String, String]
+  private val conf = ConfigFactory.load.getConfig("spark-sap-test")
+  private val jcoClienConf = conf.getConfig("client")
+  private val jcoOptions = jcoClienConf.root.keySet.asScala.map(k => s"client.$k" -> jcoClienConf.getString(k)).toMap
 
   def baseDF =
     spark.read

@@ -2,12 +2,15 @@
 
 ### Links on useful SAP tables
 
+- Function to read tables https://www.se80.co.uk/sapfms/r/rfc_/rfc_read_table.htm
+    - filter pushdown https://stackoverflow.com/questions/27633332/rfc-read-table-passing-options-and-fields-parametrs-c
+    - possible alternatives `TABLE_ENTRIES_GET_VIA_RFC` or `RFC_GET_TABLE_ENTRIES` or `BBP_RFC_READ_TABLE`
 - tables with info about tables
 	- https://www.se80.co.uk/saptables/d/dd02/dd02l.htm — list
 	- https://www.se80.co.uk/saptables/d/dd02/dd02t.htm — descriptions
 	- https://www.se80.co.uk/saptables/d/dd03/dd03l.htm — list of columns
 	- https://www.se80.co.uk/saptables/d/dd03/dd03t.htm — column descriptions
-	- https://www.erpgreat.com/abap/how-to-get-the-field-descriptions-of-a-table.htm
+	- https://www.erpgreat.com/abap/how-to-get-the-field-descriptions-of-a-table.htm	
 - a table with info about funcitons https://www.se80.co.uk/saptables/t/tfdi/tfdir.htm 
 	- Functinoa with `FMODE = 'R'` are "remote"
 - queries
