@@ -18,9 +18,9 @@ class SapTablePartitionReader(partition: SapDataSourceReader.TablePartition, sch
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
   private val jcoTableReadFunName = "RFC_READ_TABLE"
-  private val tableReadFun = Some(dest.getRepository.getFunction(jcoTableReadFunName)).get
-  private val imports = Some(tableReadFun.getImportParameterList).get
-  private val tables = Some(tableReadFun.getTableParameterList).get
+  private val tableReadFun = Option(dest.getRepository.getFunction(jcoTableReadFunName)).get
+  private val imports = Option(tableReadFun.getImportParameterList).get
+  private val tables = Option(tableReadFun.getTableParameterList).get
 
   imports.setValue("QUERY_TABLE", partition.tableName)
   imports.setValue("DELIMITER", ";")
