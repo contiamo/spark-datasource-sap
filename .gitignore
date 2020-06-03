@@ -13,5 +13,5 @@ target
 __pycache__
 target-spark-docker-image
 /dev_jco_rfc.trc
-src/test/resources/application.conf
+sap-dev-env.sh
 
