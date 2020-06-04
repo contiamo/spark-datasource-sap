@@ -10,6 +10,20 @@ import org.apache.spark.sql.types.{DataType, Decimal, DecimalType, StructField, 
 import org.apache.spark.unsafe.types.UTF8String
 
 package object sap {
+  class SapDataSourceException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
+    def this(msg: String) = this(msg, null)
+  }
+
+  class SapEntityNotFoundException(entityType: String, name: String)
+      extends SapDataSourceException(s"$entityType $name not found.")
+
+  class RFCNotFoundException(name: String) extends SapEntityNotFoundException("SAP RFC", name)
+
+  class InvalidConfigurationException(message: String) extends SapDataSourceException(message)
+
+  class NoParamaterList(listKind: String, entity: String)
+      extends SapDataSourceException(s"Unable to retrieve $listKind parameter list for $entity.")
+
   def sapToSparkType(typeCode: Int, bcdDecimals: Int = 38): DataType = typeCode match {
     case JCoMetaData.TYPE_CHAR    => StringType
     case JCoMetaData.TYPE_NUM     => StringType

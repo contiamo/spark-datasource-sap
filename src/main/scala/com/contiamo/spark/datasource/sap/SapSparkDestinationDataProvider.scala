@@ -9,7 +9,6 @@ object SapSparkDestinationDataProvider {
   protected val destPropertiesMap = new ConcurrentHashMap[String, Properties]()
 
   def register(options: Map[String, String]): String = {
-    // TODO is this robust?
     val destKey = s"SAP-${options.toString.hashCode.toString}"
     val properties = new Properties()
     options.foreach { case (k, v) => properties.setProperty(k, v) }

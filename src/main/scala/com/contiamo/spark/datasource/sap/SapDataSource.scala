@@ -10,8 +10,8 @@ class SapDataSource extends DataSourceV2 with ReadSupport {
 
 object SapDataSource {
   val TABLE_KEY = DataSourceOptions.TABLE_KEY
-  val BAPI_KEY = "bapi-name"
+  val BAPI_KEY = "bapi"
   val BAPI_ARGS_KEY = "bapi-args"
-  val BAPI_OUTPUT_KEY = "bapi-output"
+  val BAPI_OUTPUT_TABLE_KEY = "bapi-output-table"
   val BAPI_FLATTEN_KEY = "bapi-output-flatten"
 }

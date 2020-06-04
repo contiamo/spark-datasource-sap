@@ -23,7 +23,9 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
  */
 
 class SapDataSourceReader(options: DataSourceOptions) extends DataSourceReader with SupportsPushDownRequiredColumns {
-  protected val optionsMap: SapDataSourceReader.OptionsMap = options.asMap().asScala.toMap
+  import SapDataSourceReader._
+
+  protected val optionsMap: OptionsMap = options.asMap.asScala.toMap
 
   private var requiredColumns: Option[StructType] = None
   private var partitionsInfo = SapDataSourceReader.createPartitions(optionsMap, requiredColumns)
@@ -49,7 +51,7 @@ object SapDataSourceReader {
 
   case class BapiPartition(funName: String,
                            bapiArgs: Map[String, JValue],
-                           bapiOutput: String,
+                           bapiOutputTable: Option[String],
                            bapiFlatten: Boolean,
                            requiredColumns: Option[StructType],
                            jcoOptions: Map[String, String])
@@ -59,15 +61,10 @@ object SapDataSourceReader {
 
   case class PartitionsInfo(schemaReader: SapSchemaReader, partitions: Seq[SapInputPartition])
 
-  def extractJcoOptions(options: OptionsMap): Map[String, String] = {
-    val jcoPrefixes = Seq("client", "destination")
+  def extractJcoOptions(options: OptionsMap): Map[String, String] =
     options
-      .filterKeys(opt => jcoPrefixes.exists(prefix => opt.startsWith(prefix)))
-      .map {
-        case (k, v) => (s"jco.$k", v)
-      }
-      .toMap
-  }
+      .filterKeys(_.startsWith("jco."))
+      .map(identity) // scala bug workaround (https://github.com/scala/bug/issues/7005)
 
   protected def createTablePartitions(options: OptionsMap,
                                       requiredColumns: Option[StructType]): Option[PartitionsInfo] = {
@@ -75,7 +72,7 @@ object SapDataSourceReader {
 
     options.get(SapDataSource.TABLE_KEY).map { tableName =>
       val partition = TablePartition(tableName, requiredColumns, jcoOptions)
-      val schemaReader = new SapTableSchemaReader(partition)
+      val schemaReader = new SapTableSchemaReader(partition, noData = true)
 
       PartitionsInfo(schemaReader, Seq(partition))
     }
@@ -89,17 +86,16 @@ object SapDataSourceReader {
 
     options
       .get(SapDataSource.BAPI_KEY)
-      .flatMap { bapiName =>
-        val bapiArgsStr = options.getOrElse(SapDataSource.BAPI_ARGS_KEY, "{}")
-        parse(bapiArgsStr) match {
-          case JObject(args) =>
-            Some((bapiName, args.toMap))
-          case _ => None
-        }
-      }
       .map {
-        case (bapiName, bapiArgs) =>
-          val bapiOutput = options.getOrElse(SapDataSource.BAPI_OUTPUT_KEY, "")
+        case bapiName =>
+          val bapiArgsStr = options.getOrElse(SapDataSource.BAPI_ARGS_KEY, "{}")
+          val bapiArgs = parse(bapiArgsStr) match {
+            case JObject(args) => args.toMap
+            case _ =>
+              throw new InvalidConfigurationException(s"${SapDataSource.BAPI_ARGS_KEY} must contain a JSON object")
+          }
+
+          val bapiOutput = options.get(SapDataSource.BAPI_OUTPUT_TABLE_KEY)
           val bapiFlatten = options.getOrElse(SapDataSource.BAPI_FLATTEN_KEY, "") == "true"
           val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, bapiFlatten, requiredColumns, jcoOptions)
           val schemaReader = new SapBapiPartitionReader(partition, true)
@@ -109,5 +105,7 @@ object SapDataSourceReader {
   }
 
   def createPartitions(options: OptionsMap, requiredColumns: Option[StructType]): PartitionsInfo =
-    createTablePartitions(options, requiredColumns).orElse(createBapiPartitions(options, requiredColumns)).get
+    createTablePartitions(options, requiredColumns)
+      .orElse(createBapiPartitions(options, requiredColumns))
+      .getOrElse(throw new InvalidConfigurationException("neither TABLE nor BAPI configuration was provided"))
 }

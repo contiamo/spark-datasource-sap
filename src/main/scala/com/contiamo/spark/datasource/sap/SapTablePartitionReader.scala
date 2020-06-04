@@ -1,15 +1,14 @@
 package com.contiamo.spark.datasource.sap
 
+import com.contiamo.spark.datasource.sap.SapDataSourceReader.TablePartition
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 import org.apache.spark.unsafe.types.UTF8String
 
-class SapTablePartitionReader(partition: SapDataSourceReader.TablePartition)
-    extends SapTableSchemaReader(partition)
+class SapTablePartitionReader(partition: TablePartition)
+    extends SapTableSchemaReader(partition, noData = false)
     with InputPartitionReader[InternalRow] {
-
-  override protected val schemaOnly: Boolean = false
 
   private val currentRow = new SpecificInternalRow(schema)
   private val data = tables.getTable("DATA")

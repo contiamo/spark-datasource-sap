@@ -12,13 +12,15 @@ import org.apache.spark.sql.Column
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
+class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
   import spark.implicits._
   import org.apache.spark.sql.functions.col
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
-  private val jcoClienConf = conf.getConfig("client")
-  private val jcoOptions = jcoClienConf.root.keySet.asScala.map(k => s"client.$k" -> jcoClienConf.getString(k)).toMap
+  private val jcoClienConf = conf.getConfig("jco.client")
+  private val jcoOptions = jcoClienConf.root.keySet.asScala
+    .map(k => s"jco.client.$k" -> jcoClienConf.getString(k))
+    .toMap
 
   /* warm-up JCo connection in case the SAP system needs
      time before its starts accepting connections.
@@ -32,7 +34,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
       .format("com.contiamo.spark.datasource.sap.SapDataSource")
       .options(jcoOptions)
 
-  val username = jcoOptions("client.user")
+  val username = jcoOptions("jco.client.user")
 
   private def flattenSchema(schema: StructType, prefix: String = null): Array[Column] =
     schema.fields.flatMap { f =>
@@ -98,7 +100,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
         baseDF
           .option(SapDataSource.BAPI_KEY, "RFC_READ_TABLE")
           .option(SapDataSource.BAPI_ARGS_KEY, argsJson)
-          .option(SapDataSource.BAPI_OUTPUT_KEY, "DATA")
+          .option(SapDataSource.BAPI_OUTPUT_TABLE_KEY, "DATA")
           .load()
 
       // if parameters were passed correctly then the result must contain usernames only
@@ -219,7 +221,7 @@ class HelloSparkDatasourceSpec extends AnyFunSpec with SparkSessionTestWrapper w
       }
 
       it("retrieves its table parameter") {
-        val sourceDF = userGetDetailCall(Map(SapDataSource.BAPI_OUTPUT_KEY -> "PROFILES"))
+        val sourceDF = userGetDetailCall(Map(SapDataSource.BAPI_OUTPUT_TABLE_KEY -> "PROFILES"))
 
         val expectedCols = Seq("BAPIPROF", "BAPIPTEXT", "BAPITYPE", "BAPIAKTPS")
 

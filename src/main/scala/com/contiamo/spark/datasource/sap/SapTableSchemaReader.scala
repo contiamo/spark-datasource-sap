@@ -1,24 +1,27 @@
 package com.contiamo.spark.datasource.sap
 
+import com.contiamo.spark.datasource.sap.SapDataSourceReader.TablePartition
+import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._
 
 import scala.collection.immutable
 import scala.util.chaining._
 
-class SapTableSchemaReader(partition: SapDataSourceReader.TablePartition) extends SapSchemaReader {
+class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends SapSchemaReader {
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
-  protected val schemaOnly: Boolean = true
-
   protected val jcoTableReadFunName = "RFC_READ_TABLE"
-  protected val tableReadFun = Option(dest.getRepository.getFunction(jcoTableReadFunName)).get
-  protected val imports = Option(tableReadFun.getImportParameterList).get
-  protected val tables = Option(tableReadFun.getTableParameterList).get
+  protected val tableReadFun: JCoFunction = Option(dest.getRepository.getFunction(jcoTableReadFunName))
+    .getOrElse(throw new RFCNotFoundException(jcoTableReadFunName))
+  protected val imports: JCoParameterList = Option(tableReadFun.getImportParameterList)
+    .getOrElse(throw new NoParamaterList("imports", jcoTableReadFunName))
+  protected val tables: JCoParameterList = Option(tableReadFun.getTableParameterList)
+    .getOrElse(throw new NoParamaterList("tables", jcoTableReadFunName))
 
   imports.setValue("QUERY_TABLE", partition.tableName)
   imports.setValue("DELIMITER", ";")
 
-  if (schemaOnly) imports.setValue("NO_DATA", "Y")
+  if (noData) imports.setValue("NO_DATA", "Y")
 
   partition.requiredColumns.foreach { schema =>
     val fieldsIn = tables.getTable("FIELDS")
