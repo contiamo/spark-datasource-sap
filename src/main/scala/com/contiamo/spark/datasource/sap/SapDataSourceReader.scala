@@ -59,7 +59,10 @@ object SapDataSourceReader {
     override def createPartitionReader(): InputPartitionReader[InternalRow] = new SapBapiPartitionReader(this)
   }
 
-  case class PartitionsInfo(schemaReader: SapSchemaReader, partitions: Seq[SapInputPartition])
+  trait PartitionsInfo {
+    def schemaReader: SapSchemaReader
+    def partitions: Seq[SapInputPartition]
+  }
 
   def extractJcoOptions(options: OptionsMap): Map[String, String] =
     options
@@ -71,10 +74,11 @@ object SapDataSourceReader {
     val jcoOptions = extractJcoOptions(options)
 
     options.get(SapDataSource.TABLE_KEY).map { tableName =>
-      val partition = TablePartition(tableName, requiredColumns, jcoOptions)
-      val schemaReader = new SapTableSchemaReader(partition, noData = true)
-
-      PartitionsInfo(schemaReader, Seq(partition))
+      new PartitionsInfo {
+        private val partition = TablePartition(tableName, requiredColumns, jcoOptions)
+        val partitions = Seq(partition)
+        def schemaReader = new SapTableSchemaReader(partition, noData = true)
+      }
     }
   }
 
@@ -97,10 +101,13 @@ object SapDataSourceReader {
 
           val bapiOutput = options.get(SapDataSource.BAPI_OUTPUT_TABLE_KEY)
           val bapiFlatten = options.getOrElse(SapDataSource.BAPI_FLATTEN_KEY, "") == "true"
-          val partition = BapiPartition(bapiName, bapiArgs, bapiOutput, bapiFlatten, requiredColumns, jcoOptions)
-          val schemaReader = new SapBapiPartitionReader(partition, true)
 
-          PartitionsInfo(schemaReader, Seq(partition))
+          new PartitionsInfo {
+            private val partition =
+              BapiPartition(bapiName, bapiArgs, bapiOutput, bapiFlatten, requiredColumns, jcoOptions)
+            val partitions = Seq(partition)
+            def schemaReader = new SapBapiPartitionReader(partition, true)
+          }
       }
   }
 
