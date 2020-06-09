@@ -18,6 +18,7 @@ libraryDependencies ++= {
   val sparkVersion = "2.4.4"
   Seq(
     "org.scalatest" %% "scalatest" % "3.1.1" % "test",
+    "com.typesafe" % "config" % "1.4.0" % "test",
     "org.apache.spark" %% "spark-core" % sparkVersion % Provided,
     "org.apache.spark" %% "spark-sql" % sparkVersion % Provided,
     "com.github.bigwheel" %% "util-backports" % "2.1"

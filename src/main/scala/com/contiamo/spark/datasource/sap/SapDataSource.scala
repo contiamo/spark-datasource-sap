@@ -5,7 +5,13 @@ import org.apache.spark.sql.sources.v2.{DataSourceOptions, DataSourceV2, ReadSup
 
 class SapDataSource extends DataSourceV2 with ReadSupport {
   override def createReader(options: DataSourceOptions): DataSourceReader =
-    new SapDataSourceReader(
-      options.get("mockdata").get()
-    )
+    new SapDataSourceReader(options)
+}
+
+object SapDataSource {
+  val TABLE_KEY = DataSourceOptions.TABLE_KEY
+  val BAPI_KEY = "bapi"
+  val BAPI_ARGS_KEY = "bapi-args"
+  val BAPI_OUTPUT_TABLE_KEY = "bapi-output-table"
+  val BAPI_FLATTEN_KEY = "bapi-output-flatten"
 }

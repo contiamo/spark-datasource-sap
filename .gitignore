@@ -12,3 +12,6 @@ target
 .tags
 __pycache__
 target-spark-docker-image
+/dev_jco_rfc.trc
+sap-dev-env.sh
+
