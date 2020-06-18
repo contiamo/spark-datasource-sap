@@ -15,13 +15,15 @@ publishTo := {
   else Some(contiamoReleasesRepo)
 }
 
-credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
-credentials ++= Seq(contiamoReleasesRepo, contiamoSnapshotsRepo).map { r =>
-  Credentials(r.name,
-              r.root,
-              sys.env.getOrElse("ARTIFACTORY_USERNAME", "ci"),
-              sys.env.getOrElse("ARTIFACTORY_PASSWORD", ""))
-}
+credentials += sys.env
+  .get("ARTIFACTORY_PASSWORD")
+  .map { password =>
+    Credentials("Artifactory Realm",
+                "artifactory.contiamo.io",
+                sys.env.getOrElse("ARTIFACTORY_USERNAME", "ci"),
+                password)
+  }
+  .getOrElse(Credentials(Path.userHome / ".ivy2" / ".credentials"))
 
 libraryDependencies ++= {
   val sparkVersion = "2.4.4"
