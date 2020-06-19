@@ -1,6 +1,8 @@
+enablePlugins(GitVersioning)
+git.useGitDescribe := true
+
 name := "spark-datasource-sap"
 organization := "com.contiamo"
-version := "0.1-SNAPSHOT"
 
 scalaVersion := "2.12.11"
 
@@ -12,7 +14,15 @@ publishTo := {
   else Some(contiamoReleasesRepo)
 }
 
-credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
+credentials += sys.env
+  .get("ARTIFACTORY_PASSWORD")
+  .map { password =>
+    Credentials("Artifactory Realm",
+                "artifactory.contiamo.io",
+                sys.env.getOrElse("ARTIFACTORY_USERNAME", "ci"),
+                password)
+  }
+  .getOrElse(Credentials(Path.userHome / ".ivy2" / ".credentials"))
 
 libraryDependencies ++= {
   val sparkVersion = "2.4.4"
