@@ -1,5 +1,11 @@
 # SAP datasource for Spark
 
+For usage examples see `src/test/scala/SapSparkDatasourceIntegrationSpec.scala`. 
+
+Snapshot releases are published automatically upon PR merge. 
+In order to publish a full release you need to tag a commit on 
+`master` then create a GH release.
+
 ### Links on useful SAP tables
 
 - Function to read tables https://www.se80.co.uk/sapfms/r/rfc_/rfc_read_table.htm
