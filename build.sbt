@@ -1,7 +1,5 @@
 enablePlugins(GitVersioning)
 
-git.useGitDescribe := true
-
 name := "spark-datasource-sap"
 organization := "com.contiamo"
 
