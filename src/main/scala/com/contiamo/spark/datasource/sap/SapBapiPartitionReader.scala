@@ -2,16 +2,13 @@ package com.contiamo.spark.datasource.sap
 
 import com.contiamo.spark.datasource.sap.SapDataSourceReader.BapiPartition
 import com.sap.conn.jco.{JCoMetaData, JCoParameterList, JCoRecord}
-
-import scala.util.chaining._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 import org.apache.spark.sql.types._
-import org.json4s.JValue
-import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JObject, JString, JValue}
+import org.json4s.JsonAST._
 
-import scala.collection.{AbstractIterator, mutable}
+import scala.collection.AbstractIterator
 
 class SapBapiPartitionReader(partition: BapiPartition, schemaOnly: Boolean = false)
     extends SapSchemaReader
@@ -91,7 +88,7 @@ class SapBapiPartitionReader(partition: BapiPartition, schemaOnly: Boolean = fal
   private def setAtomicParameterFromJson(rec: JCoRecord, paramName: String, jsonValue: JValue): Unit = {
     jsonValue match {
       case JString(v)   => rec.setValue(paramName, v)
-      case JInt(v)      => rec.setValue(paramName, v)
+      case JInt(v)      => rec.setValue(paramName, v.bigInteger.longValue())
       case JLong(v)     => rec.setValue(paramName, v)
       case JBool(true)  => rec.setValue(paramName, 'X')
       case JBool(false) => rec.setValue(paramName, ' ')

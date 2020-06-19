@@ -18,6 +18,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 /* TODO
   - with SupportsPushDownFilters
+  - SessionConfigSupport
   - partitioning columns
   - SessionReferenceProvider
  */
