@@ -2,6 +2,8 @@ enablePlugins(GitVersioning)
 
 name := "spark-datasource-sap"
 organization := "com.contiamo"
+version :=
+  git.describeVersion(git.gitDescribedVersion.value, "-SNAPSHOT").getOrElse("unknown")
 
 scalaVersion := "2.12.11"
 
