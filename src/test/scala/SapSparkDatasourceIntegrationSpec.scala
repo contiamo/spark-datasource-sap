@@ -29,9 +29,11 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
   private val jcoDest = JCoDestinationManager.getDestination(jcoDestKey)
   Try(jcoDest.ping())
 
+  val format = classOf[SapDataSource].getName
+
   def baseDF =
     spark.read
-      .format("com.contiamo.spark.datasource.sap.SapDataSource")
+      .format(format)
       .options(jcoOptions)
 
   val username = jcoOptions("jco.client.user")
@@ -70,6 +72,33 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
 
     // not using spark.count to force pushdown of both columns
     sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
+  }
+
+  it("lists schemas for multiple tables") {
+    import org.json4s._
+    import org.json4s.jackson.JsonMethods._
+    implicit val formats = DefaultFormats
+
+    val sourceDF =
+      baseDF
+        .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR"]""")
+        .load()
+
+    val expectedCols = Seq("name", "schemaJson", "dfOptions")
+    sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
+
+    val res = sourceDF.collect()
+    res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR")
+    res.foreach { row =>
+      val repotedSchema = DataType.fromJson(row.getString(1))
+      val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
+
+      spark.read
+        .format(format)
+        .options(dfOptions)
+        .load()
+        .schema mustEqual repotedSchema
+    }
   }
 
   describe("BAPI partition reader") {
