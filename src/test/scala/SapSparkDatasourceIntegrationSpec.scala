@@ -74,30 +74,43 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
     sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
   }
 
-  it("lists schemas for multiple tables") {
-    import org.json4s._
-    import org.json4s.jackson.JsonMethods._
-    implicit val formats = DefaultFormats
+  describe("list tables dataframe") {
+    it("lists schemas for multiple tables") {
+      import org.json4s._
+      import org.json4s.jackson.JsonMethods._
+      implicit val formats = DefaultFormats
 
-    val sourceDF =
-      baseDF
-        .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR"]""")
-        .load()
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR"]""")
+          .load()
 
-    val expectedCols = Seq("name", "schemaJson", "dfOptions")
-    sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
+      val expectedCols = Seq("name", "schemaJson", "dfOptions")
+      sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
 
-    val res = sourceDF.collect()
-    res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR")
-    res.foreach { row =>
-      val repotedSchema = DataType.fromJson(row.getString(1))
-      val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
+      val res = sourceDF.collect()
+      res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR")
+      res.foreach { row =>
+        val repotedSchema = DataType.fromJson(row.getString(1))
+        val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
 
-      spark.read
-        .format(format)
-        .options(dfOptions)
-        .load()
-        .schema mustEqual repotedSchema
+        spark.read
+          .format(format)
+          .options(dfOptions)
+          .load()
+          .schema mustEqual repotedSchema
+      }
+    }
+
+    it("fails if a table doesn't exist") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "BAZINGA"]""")
+          .load()
+
+      val res = Try(sourceDF.collect()).toEither
+      res.isLeft mustBe true
+      res.left.get.getMessage must (include("TABLE_NOT_AVAILABLE") and include("BAZINGA"))
     }
   }
 
