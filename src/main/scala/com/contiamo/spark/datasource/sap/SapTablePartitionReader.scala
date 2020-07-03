@@ -22,8 +22,8 @@ class SapTablePartitionReader(partition: TablePartition)
     for (fieldDesc <- fields) {
       val fieldEnd = rowStr.length min (fieldDesc.offset + fieldDesc.length)
       val strValue = rowStr.substring(fieldDesc.offset, fieldEnd).trim
-      val sparkStrValue = UTF8String.fromBytes(strValue.getBytes("UTF-8"))
-      currentRow.update(fieldDesc.idx, sparkStrValue)
+      val sparkValue = parseAtomicValue(strValue, fieldDesc.sparkType)
+      currentRow.update(fieldDesc.idx, sparkValue)
     }
 
     currentRow
