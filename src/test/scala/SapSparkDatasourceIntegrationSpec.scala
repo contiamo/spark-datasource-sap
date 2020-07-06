@@ -1,4 +1,3 @@
-import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.types._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must
@@ -11,10 +10,25 @@ import org.apache.spark.sql.Column
 
 import scala.collection.JavaConverters._
 import scala.util.Try
+import java.sql.Date
+import java.sql.Timestamp
+import java.text.SimpleDateFormat
+import java.time.LocalDate
+
+object SapSparkDatasourceIntegrationSpec {
+  case class Partner(client: String,
+                     birthdt: Date,
+                     mem_house: BigDecimal,
+                     crdat: Date,
+                     crtim: Timestamp,
+                     db_key: String,
+                     valid_from: BigDecimal)
+}
 
 class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
   import spark.implicits._
   import org.apache.spark.sql.functions.col
+  import SapSparkDatasourceIntegrationSpec._
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
   private val jcoClienConf = conf.getConfig("jco.client")
@@ -57,21 +71,71 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       .options(options)
       .load()
 
-  it("reads a SAP USR01 table") {
-    val sourceDF =
-      baseDF
-        .option(SapDataSource.TABLE_KEY, "USR01")
-        .load()
+  describe("Table partition reader") {
+    it("reads a SAP USR01 table") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.TABLE_KEY, "USR01")
+          .load()
 
-    val expectedCols = Seq("MANDT", "LANGU", "BNAME")
-    sourceDF.schema.fields must contain allElementsOf expectedCols.map(col => StructField(col, StringType))
+      val expectedCols = Seq("MANDT", "LANGU", "BNAME")
+      sourceDF.schema.fields must contain allElementsOf expectedCols.map(col => StructField(col, StringType))
 
-    sourceDF.collect().map(_.mkString).mkString must include(username)
+      sourceDF.collect().map(_.mkString).mkString must include(username)
 
-    sourceDF.select("BNAME").collect().map(_.mkString) must contain(username)
+      sourceDF.select("BNAME").collect().map(_.mkString) must contain(username)
 
-    // not using spark.count to force pushdown of both columns
-    sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
+      // not using spark.count to force pushdown of both columns
+      sourceDF.select("MANDT").where($"BNAME" === username).collect().length mustEqual 1
+    }
+
+    // this test relies on the contents of a our SAP test system
+    it("reads a SAP BUT000 table") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.TABLE_KEY, "BUT000")
+          .load()
+
+      sourceDF
+        .select("CLIENT", "MEM_HOUSE", "BIRTHDT", "CRDAT", "CRTIM", "DB_KEY", "VALID_FROM")
+        .as[Partner]
+        .collect() must contain(
+        Partner(
+          "001",
+          null,
+          BigDecimal.exact(0).setScale(18),
+          new Date(new SimpleDateFormat("yyyy-MM-dd").parse("2020-06-29").getTime),
+          new Timestamp(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("1970-01-01 10:20:50").getTime),
+          "0000000000000000",
+          BigDecimal.exact("10101000000").setScale(18)
+        ))
+    }
+
+    it("reads a SAP USR02 table") {
+      val (erdat, trdat, ltime) = userGetDetailCall()
+        .select(
+          col("ADMINDATA.ERDAT").as[Date],
+          col("ADMINDATA.TRDAT").as[Date],
+          col("LOGONDATA.LTIME").as[Timestamp]
+        )
+        .collect()
+        .head
+
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.TABLE_KEY, "USR02")
+          .load()
+
+      sourceDF
+        .select(
+          col("BNAME").as[String],
+          col("PWDSTATE").as[Int],
+          col("ERDAT").as[Date],
+          col("TRDAT").as[Date],
+          col("LTIME").as[Timestamp]
+        )
+        .collect() must contain(username, 0, erdat, trdat, ltime)
+    }
   }
 
   describe("list tables dataframe") {
@@ -82,14 +146,14 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
 
       val sourceDF =
         baseDF
-          .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR"]""")
+          .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR", "USR02"]""")
           .load()
 
       val expectedCols = Seq("name", "schemaJson", "dfOptions")
       sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
 
       val res = sourceDF.collect()
-      res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR")
+      res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR", "USR02")
       res.foreach { row =>
         val repotedSchema = DataType.fromJson(row.getString(1))
         val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
