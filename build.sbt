@@ -6,6 +6,8 @@ organization := "com.contiamo"
 
 scalaVersion := "2.12.11"
 
+fork in Test := true
+
 val contiamoReleasesRepo = "contiamo-releases-repo" at "https://artifactory.contiamo.io/artifactory/contiamo-releases"
 val contiamoSnapshotsRepo = "contiamo-snapshots-repo" at "https://artifactory.contiamo.io/artifactory/contiamo-snapshots"
 

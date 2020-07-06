@@ -33,7 +33,10 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
 
   tableReadFun.execute(dest)
 
-  case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String)
+  case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
+    val sparkType: DataType = sapLetterToSparkType(sapTypeName)
+    def structField: StructField = StructField(name, sparkType)
+  }
 
   protected lazy val fields: immutable.IndexedSeq[ReadTableField] = {
     val fs = collection.mutable.ArrayBuffer.empty[ReadTableField]
@@ -54,8 +57,5 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
     fs.toIndexedSeq
   }
 
-  override def schema: StructType =
-    fields
-      .map(fieldDesc => StructField(fieldDesc.name, StringType))
-      .pipe(StructType.apply)
+  override def schema = StructType(fields.map(_.structField))
 }

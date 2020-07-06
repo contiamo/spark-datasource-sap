@@ -1,5 +1,6 @@
 package com.contiamo.spark.datasource
 
+import java.text.SimpleDateFormat
 import java.time.{LocalDateTime, ZoneOffset}
 
 import scala.util.chaining._
@@ -8,6 +9,13 @@ import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.types.DataTypes._
 import org.apache.spark.sql.types.{DataType, Decimal, DecimalType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.sql.catalyst.InternalRow
+import java.time.format.DateTimeFormatter
+import java.time.LocalDate
+import java.time.LocalTime
+import java.util.TimeZone
+
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 
 package object sap {
   class SapDataSourceException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
@@ -24,23 +32,75 @@ package object sap {
   class NoParamaterList(listKind: String, entity: String)
       extends SapDataSourceException(s"Unable to retrieve $listKind parameter list for $entity.")
 
-  def sapToSparkType(typeCode: Int, bcdDecimals: Int = 38): DataType = typeCode match {
+  class ErrorParsingValueFromRfcReadTable(strValue: String, expectedType: DataType)
+      extends SapDataSourceException(s"Unable to parse a value of type $expectedType from string: '$strValue'")
+
+  def sapCodeToSparkType(typeCode: Int, bcdDecimalPrecision: Int): DataType = typeCode match {
     case JCoMetaData.TYPE_CHAR    => StringType
     case JCoMetaData.TYPE_NUM     => StringType
     case JCoMetaData.TYPE_BYTE    => BinaryType
-    case JCoMetaData.TYPE_BCD     => createDecimalType(bcdDecimals, 0)
     case JCoMetaData.TYPE_INT     => IntegerType
     case JCoMetaData.TYPE_INT1    => ByteType
     case JCoMetaData.TYPE_INT2    => ShortType
     case JCoMetaData.TYPE_FLOAT   => DoubleType
     case JCoMetaData.TYPE_DATE    => DateType
     case JCoMetaData.TYPE_TIME    => TimestampType
-    case JCoMetaData.TYPE_DECF16  => createDecimalType(16, 0)
-    case JCoMetaData.TYPE_DECF34  => createDecimalType(38, 0)
+    case JCoMetaData.TYPE_DECF16  => DecimalType.SYSTEM_DEFAULT
+    case JCoMetaData.TYPE_DECF34  => DecimalType.SYSTEM_DEFAULT
     case JCoMetaData.TYPE_STRING  => StringType
     case JCoMetaData.TYPE_XSTRING => BinaryType
-    case _                        => StringType
+    case JCoMetaData.TYPE_BCD =>
+      createDecimalType(bcdDecimalPrecision, bcdDecimalPrecision min DecimalType.MAX_SCALE)
+    case _ => StringType
   }
+
+  def sapLetterToSparkType(typeCode: String): DataType = typeCode.toLowerCase match {
+    case "c" => StringType
+    case "n" => StringType
+    case "x" => StringType // it seems they are just strings when coming from RFC_READ_TABLE
+    case "p" => DecimalType.SYSTEM_DEFAULT // BCD
+    case "i" => IntegerType
+    case "b" => IntegerType
+    case "s" => IntegerType
+    case "f" => DoubleType
+    case "d" => DateType
+    case "t" => TimestampType
+    case _   => StringType
+  }
+
+  private val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
+  private val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
+
+  def parseAtomicValue(extractedStrValue: String, dataType: DataType): Any =
+    try {
+      dataType match {
+        case StringType =>
+          UTF8String.fromString(extractedStrValue)
+        case IntegerType =>
+          extractedStrValue.toInt
+        // untested
+        case DoubleType =>
+          extractedStrValue.toDouble
+        //20200629 -> 29-06-2020
+        case DateType if extractedStrValue == "00000000" || extractedStrValue == "" => null
+        case DateType                                                               =>
+          // both `millisToDays` and `parse` use the default timezone,
+          // so it should match and produce the correct integer seconds value
+          DateTimeUtils.millisToDays(sapDateStrFmt.parse(extractedStrValue).getTime)
+        // 102050 -> 10:20:50
+        case TimestampType if extractedStrValue == "000000" || extractedStrValue == "" => null
+        case TimestampType =>
+          val locT = sapTimeStrFmt.parse("1970-01-01 " + extractedStrValue).getTime
+          DateTimeUtils.fromMillis(locT)
+        case _decimal: DecimalType if !extractedStrValue.startsWith("*") =>
+          Decimal.fromDecimal(BigDecimal.exact(extractedStrValue))
+      }
+    } catch {
+      case err: Throwable =>
+        val newErr = new ErrorParsingValueFromRfcReadTable(extractedStrValue, dataType)
+        newErr.addSuppressed(err)
+        throw newErr
+    }
 
   def sapMetaDataToSparkSchema(meta: JCoMetaData): StructType =
     0.until(meta.getFieldCount)
@@ -49,7 +109,7 @@ package object sap {
           if (meta.isStructure(i))
             sapMetaDataToSparkSchema(meta.getRecordMetaData(i))
           else
-            sapToSparkType(meta.getType(i), meta.getDecimals(i))
+            sapCodeToSparkType(meta.getType(i), meta.getDecimals(i))
         StructField(meta.getName(i), sparkType)
       }
       .pipe(StructType.apply)
@@ -92,13 +152,13 @@ package object sap {
     case DoubleType =>
       rec.getDouble(idx)
     case DateType =>
-      LocalDateTime.ofInstant(rec.getDate(idx).toInstant, ZoneOffset.UTC).toLocalDate.toEpochDay.toInt
+      DateTimeUtils.millisToDays(rec.getDate(idx).getTime)
     case TimestampType =>
-      rec.getDate(idx).getTime
+      DateTimeUtils.fromMillis(rec.getTime(idx).getTime)
     case BinaryType =>
       rec.getByteArray(idx)
     case StringType =>
-      UTF8String.fromBytes(rec.getString(idx).getBytes("UTF-8"))
+      UTF8String.fromString(rec.getString(idx))
     case _decimal: DecimalType =>
       Decimal.fromDecimal(rec.getBigDecimal(idx))
   }
