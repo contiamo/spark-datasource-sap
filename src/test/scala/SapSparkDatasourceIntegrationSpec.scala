@@ -128,6 +128,9 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
           .option(SapDataSource.TABLE_KEY, "USR02")
           .load()
 
+      // built-in RFC_READ_TABLE is not able to select * from this
+      // table so, this tests both deserialization of several types
+      // and projection pushdown
       sourceDF
         .select(
           col("BNAME").as[String],
@@ -155,12 +158,34 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       resultStr must include(username)
       resultStr.length mustBe >(1000)
 
+      // alt function doensn't fail on projection pushdown
       sourceDF
         .select(
           col("BNAME").as[String],
           col("PWDSTATE").as[Int]
         )
         .collect() must contain(username, 0)
+    }
+
+    it("joins USR01 with USR02") {
+      val t1 = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR01")
+        .load()
+
+      val t2 = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .load()
+
+      t1.join(t2, Seq("MANDT", "BNAME"))
+        .select(
+          col("BNAME").as[String],
+          col("MANDT").as[String],
+          col("LANGU").as[String],
+          col("PWDSTATE").as[Int]
+        )
+        .where(col("BNAME") === username)
+        .collect()
+        .length mustEqual 1
     }
   }
 
@@ -378,9 +403,4 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
 
     }
   }
-
-  /* TODO don't forget to test
-    - multiple table
-    - assert projection pushdowns
- */
 }
