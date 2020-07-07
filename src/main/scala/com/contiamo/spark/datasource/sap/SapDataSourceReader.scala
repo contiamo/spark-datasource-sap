@@ -45,7 +45,10 @@ object SapDataSourceReader {
   type OptionsMap = Map[String, String]
   type SapInputPartition = InputPartition[InternalRow]
 
-  case class TablePartition(tableName: String, requiredColumns: Option[StructType], jcoOptions: Map[String, String])
+  case class TablePartition(tableName: String,
+                            requiredColumns: Option[StructType],
+                            jcoTableReadFunName: String,
+                            jcoOptions: Map[String, String])
       extends SapInputPartition {
     override def createPartitionReader(): InputPartitionReader[InternalRow] = new SapTablePartitionReader(this)
   }
@@ -60,7 +63,8 @@ object SapDataSourceReader {
     override def createPartitionReader(): InputPartitionReader[InternalRow] = new SapBapiPartitionReader(this)
   }
 
-  case class ListTablesPartition(tables: Seq[String], jcoOptions: Map[String, String]) extends SapInputPartition {
+  case class ListTablesPartition(tables: Seq[String], jcoTableReadFunName: String, jcoOptions: Map[String, String])
+      extends SapInputPartition {
     override def createPartitionReader(): InputPartitionReader[InternalRow] = new SapListTablesReader(this)
   }
 
@@ -80,11 +84,12 @@ object SapDataSourceReader {
 
     implicit val formats: DefaultFormats.type = DefaultFormats
     val jcoOptions = extractJcoOptions(options)
+    val tableReadFun = options.getOrElse(SapDataSource.TABLE_READ_FUN_KEY, "RFC_READ_TABLE")
 
     def createTablePartitions: Option[PartitionsInfo] =
       options.get(SapDataSource.TABLE_KEY).map { tableName =>
         new PartitionsInfo {
-          private val partition = TablePartition(tableName, requiredColumns, jcoOptions)
+          private val partition = TablePartition(tableName, requiredColumns, tableReadFun, jcoOptions)
           val partitions = Seq(partition)
           def schemaReader = new SapTableSchemaReader(partition, noData = true)
         }
@@ -119,7 +124,7 @@ object SapDataSourceReader {
         .flatMap(parse(_).extractOpt[Array[String]])
         .map { tables =>
           new PartitionsInfo {
-            private val partition = ListTablesPartition(tables, jcoOptions)
+            private val partition = ListTablesPartition(tables, tableReadFun, jcoOptions)
             val partitions = Seq(partition)
             def schemaReader = new SapListTablesReader(partition)
           }

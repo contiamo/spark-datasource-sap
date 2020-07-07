@@ -14,6 +14,7 @@ import java.sql.Date
 import java.sql.Timestamp
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import org.scalatest.prop.TableDrivenPropertyChecks._
 
 object SapSparkDatasourceIntegrationSpec {
   case class Partner(client: String,
@@ -136,6 +137,30 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
         )
         .collect() must contain(username, 0, erdat, trdat, ltime)
     }
+
+    // this test relies on the ZST5_READ_TABLE2 function to be present
+    // in the target SAP test system. To create one, consult with
+    // https://rfcconnector.com/documentation/kb/0007/
+    it("reads a SAP USR02 table with alternative read function") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.TABLE_KEY, "USR02")
+          .option(SapDataSource.TABLE_READ_FUN_KEY, "ZST5_READ_TABLE2")
+          .load()
+
+      // built-in RFC_READ_TABLE is not able to select * from this tables
+      // due to width limitation of DATA datable represented by TAB512
+      val resultStr = sourceDF.collect().map(_.mkString).mkString
+      resultStr must include(username)
+      resultStr.length mustBe >(1000)
+
+      sourceDF
+        .select(
+          col("BNAME").as[String],
+          col("PWDSTATE").as[Int]
+        )
+        .collect() must contain(username, 0)
+    }
   }
 
   describe("list tables dataframe") {
@@ -144,25 +169,39 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       import org.json4s.jackson.JsonMethods._
       implicit val formats = DefaultFormats
 
-      val sourceDF =
-        baseDF
-          .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR", "USR02"]""")
-          .load()
+      val tableReadFunctions = Table(
+        "TABALE_READ_FUN",
+        None,
+        Some("ZST5_READ_TABLE2")
+      )
 
-      val expectedCols = Seq("name", "schemaJson", "dfOptions")
-      sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
+      forAll(tableReadFunctions) { tableFun =>
+        val sourceDF =
+          tableFun
+            .map(fun => baseDF.option(SapDataSource.TABLE_READ_FUN_KEY, fun))
+            .getOrElse(baseDF)
+            .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "DD02L", "TFDIR", "USR02"]""")
+            .load()
 
-      val res = sourceDF.collect()
-      res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR", "USR02")
-      res.foreach { row =>
-        val repotedSchema = DataType.fromJson(row.getString(1))
-        val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
+        val expectedCols = Seq("name", "schemaJson", "dfOptions")
+        sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
 
-        spark.read
-          .format(format)
-          .options(dfOptions)
-          .load()
-          .schema mustEqual repotedSchema
+        val res = sourceDF.collect()
+        res.map(_.getString(0)) mustEqual Seq("USR01", "DD02L", "TFDIR", "USR02")
+        res.foreach { row =>
+          val repotedSchema = DataType.fromJson(row.getString(1))
+          val dfOptions = parse(row.getString(2)).extract[Map[String, String]]
+
+          tableFun.foreach { fun =>
+            dfOptions.getOrElse(SapDataSource.TABLE_READ_FUN_KEY, "") mustEqual fun
+          }
+
+          spark.read
+            .format(format)
+            .options(dfOptions)
+            .load()
+            .schema mustEqual repotedSchema
+        }
       }
     }
 
