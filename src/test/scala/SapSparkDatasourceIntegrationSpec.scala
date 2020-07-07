@@ -32,6 +32,7 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
   import SapSparkDatasourceIntegrationSpec._
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
+  private val altTableReadFunctionName = conf.getString("alt-table-read-fun")
   private val jcoClienConf = conf.getConfig("jco.client")
   private val jcoOptions = jcoClienConf.root.keySet.asScala
     .map(k => s"jco.client.$k" -> jcoClienConf.getString(k))
@@ -145,7 +146,7 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       val sourceDF =
         baseDF
           .option(SapDataSource.TABLE_KEY, "USR02")
-          .option(SapDataSource.TABLE_READ_FUN_KEY, "ZST5_READ_TABLE2")
+          .option(SapDataSource.TABLE_READ_FUN_KEY, altTableReadFunctionName)
           .load()
 
       // built-in RFC_READ_TABLE is not able to select * from this tables
@@ -172,7 +173,7 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       val tableReadFunctions = Table(
         "TABALE_READ_FUN",
         None,
-        Some("ZST5_READ_TABLE2")
+        Some(altTableReadFunctionName)
       )
 
       forAll(tableReadFunctions) { tableFun =>
