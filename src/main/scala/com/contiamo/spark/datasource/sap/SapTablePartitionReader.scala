@@ -12,6 +12,12 @@ class SapTablePartitionReader(partition: TablePartition)
 
   private val currentRow = new SpecificInternalRow(schema)
   private val data = tables.getTable("DATA")
+  private val where = tables.getTable("OPTIONS")
+
+  partition.tableFilters.flatMap(_.whereClauseLines).foreach { whereStr =>
+    where.appendRow()
+    where.setValue("TEXT", whereStr)
+  }
 
   data.firstRow()
 

@@ -1,20 +1,18 @@
-import org.apache.spark.sql.types._
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.must
+import java.sql.{Date, Timestamp}
+import java.text.SimpleDateFormat
 
-import scala.language.postfixOps
 import com.contiamo.spark.datasource.sap.{SapDataSource, SapDataSourceReader, SapSparkDestinationDataProvider}
 import com.sap.conn.jco.JCoDestinationManager
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Column
+import org.apache.spark.sql.types._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.must
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
 import scala.util.Try
-import java.sql.Date
-import java.sql.Timestamp
-import java.text.SimpleDateFormat
-import java.time.LocalDate
-import org.scalatest.prop.TableDrivenPropertyChecks._
 
 object SapSparkDatasourceIntegrationSpec {
   case class Partner(client: String,
@@ -26,10 +24,14 @@ object SapSparkDatasourceIntegrationSpec {
                      valid_from: BigDecimal)
 }
 
-class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
-  import spark.implicits._
-  import org.apache.spark.sql.functions.col
+class SapSparkDatasourceIntegrationSpec
+    extends AnyFunSpec
+    with SparkSessionTestWrapper
+    with must.Matchers
+    with ScalaCheckPropertyChecks {
   import SapSparkDatasourceIntegrationSpec._
+  import org.apache.spark.sql.functions.col
+  import spark.implicits._
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
   private val altTableReadFunctionName = conf.getString("alt-table-read-fun")
@@ -186,6 +188,27 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
         .where(col("BNAME") === username)
         .collect()
         .length mustEqual 1
+    }
+
+    it("handles filter pushdown") {
+      val noPushDownTable = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .option(SapDataSource.TABLE_FILTER_PUSHDOWN_ENABLED_KEY, "false")
+        .load()
+
+      val table = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .load()
+
+      val colsAndTypes = table.schema.fields.map(f => (f.name, f.dataType))
+      forAll(
+        WhereClauseGen.generateWhereClause(colsAndTypes)
+        //, minSuccessful(200)
+      ) { whereClause =>
+        println(s"$whereClause")
+        table.where(whereClause).select("BNAME").collect().map(_.toString) mustEqual
+          noPushDownTable.where(whereClause).select("BNAME").collect().map(_.toString)
+      }
     }
   }
 
