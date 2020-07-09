@@ -18,7 +18,7 @@ class SapListTablesReader(partition: ListTablesPartition)
 
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
-  protected val jcoTableReadFunName = "RFC_READ_TABLE"
+  protected val jcoTableReadFunName = partition.jcoTableReadFunName
   protected val tableReadFunTemplate: JCoFunctionTemplate =
     Option(dest.getRepository.getFunctionTemplate(jcoTableReadFunName))
       .getOrElse(throw new RFCNotFoundException(jcoTableReadFunName))
@@ -36,7 +36,11 @@ class SapListTablesReader(partition: ListTablesPartition)
 
     if (hasNext) {
       val table = tablesIter.next
-      val dfOptions = compact(render((SapDataSource.TABLE_KEY -> table) ~ jcoOptions))
+      val dfOptions = compact(
+        render(
+          (SapDataSource.TABLE_KEY -> table)
+            ~ (SapDataSource.TABLE_READ_FUN_KEY -> jcoTableReadFunName)
+            ~ jcoOptions))
 
       val fs = collection.mutable.ArrayBuffer.empty[StructField]
       val tableReadFun = tableReadFunTemplate.getFunction
