@@ -10,7 +10,7 @@ import scala.util.chaining._
 class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends SapSchemaReader {
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
-  protected val jcoTableReadFunName = "RFC_READ_TABLE"
+  protected val jcoTableReadFunName = partition.jcoTableReadFunName
   protected val tableReadFun: JCoFunction = Option(dest.getRepository.getFunction(jcoTableReadFunName))
     .getOrElse(throw new RFCNotFoundException(jcoTableReadFunName))
   protected val imports: JCoParameterList = Option(tableReadFun.getImportParameterList)
