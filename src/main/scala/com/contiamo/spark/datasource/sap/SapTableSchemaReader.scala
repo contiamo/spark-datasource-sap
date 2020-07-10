@@ -31,9 +31,9 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
     }
   }
 
-  private val where = tables.getTable("OPTIONS")
-
   if (!noData) {
+    val where = tables.getTable("OPTIONS")
+
     partition.whereClauseLines.foreach { whereStr =>
       where.appendRow()
       where.setValue("TEXT", whereStr)

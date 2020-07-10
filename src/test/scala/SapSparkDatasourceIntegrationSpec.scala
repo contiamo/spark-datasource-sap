@@ -199,7 +199,7 @@ class SapSparkDatasourceIntegrationSpec
 
       val table = baseDF
         .option(SapDataSource.TABLE_KEY, "USR02")
-        .load() 
+        .load()
 
       val colsAndTypes = table.schema.fields
         .map(f => WhereClauseGen.ColumnTemplate(f.name, f.dataType))
