@@ -46,9 +46,13 @@ class SapDataSourceReader(options: DataSourceOptions)
 
   override def pruneColumns(requiredSchema: StructType): Unit = partitionsInfo.pruneColumns(requiredSchema)
 
-  override def pushFilters(filters: Array[Filter]): Array[Filter] =
+  override def pushFilters(filters: Array[Filter]): Array[Filter] = {
     if (filterPushDownEnabled) partitionsInfo.pushFilters(filters)
-    else filters
+    // Always recheck filters.
+    // Because sometimes serialization idiosyncrasies happen and
+    // re-checking filters helps keep result in line with common sense.
+    filters
+  }
 
   override def pushedFilters(): Array[Filter] = partitionsInfo.pushedFilters
 }
@@ -59,7 +63,7 @@ object SapDataSourceReader {
 
   case class TablePartition(tableName: String,
                             requiredColumns: Option[StructType],
-                            tableFilters: Seq[SapTableFilter],
+                            whereClauseLines: Seq[String],
                             jcoTableReadFunName: String,
                             jcoOptions: Map[String, String])
       extends SapInputPartition {
@@ -107,20 +111,20 @@ object SapDataSourceReader {
       options.get(SapDataSource.TABLE_KEY).map { tableName =>
         new PartitionsInfo {
           private var requiredColumns: Option[StructType] = None
-          private var tableFilters: Array[SapTableFilter] = Array.empty
+          private var tableFilters: SapTableFilters = SapTableFilters.empty
 
           private def partition =
-            TablePartition(tableName, requiredColumns, tableFilters, tableReadFun, jcoOptions)
+            TablePartition(tableName, requiredColumns, tableFilters.whereClauseLines, tableReadFun, jcoOptions)
+
           def partitions = Seq(partition)
           def schemaReader = new SapTableSchemaReader(partition, noData = true)
 
           override def pruneColumns(requiredSchema: StructType): Unit = { requiredColumns = Some(requiredSchema) }
           override def pushFilters(filters: Array[Filter]): Array[Filter] = {
-            val (pushed, rejected) = SapTableFilter(filters)
-            tableFilters = pushed
-            rejected
+            tableFilters = SapTableFilters(filters)
+            tableFilters.rejected
           }
-          override def pushedFilters: Array[Filter] = tableFilters.map(_.filter)
+          override def pushedFilters: Array[Filter] = tableFilters.pushed
         }
       }
 

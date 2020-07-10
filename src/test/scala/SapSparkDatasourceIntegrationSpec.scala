@@ -30,7 +30,7 @@ class SapSparkDatasourceIntegrationSpec
     with must.Matchers
     with ScalaCheckPropertyChecks {
   import SapSparkDatasourceIntegrationSpec._
-  import org.apache.spark.sql.functions.col
+  import org.apache.spark.sql.functions.{col, collect_list}
   import spark.implicits._
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
@@ -68,10 +68,10 @@ class SapSparkDatasourceIntegrationSpec
       }
     }
 
-  private def userGetDetailCall(options: Map[String, String] = Map.empty) =
+  private def userGetDetailCall(options: Map[String, String] = Map.empty, user: String = username) =
     baseDF
       .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
-      .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + username + "\"}")
+      .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + user + "\"}")
       .options(options)
       .load()
 
@@ -193,19 +193,29 @@ class SapSparkDatasourceIntegrationSpec
     it("handles filter pushdown") {
       val noPushDownTable = baseDF
         .option(SapDataSource.TABLE_KEY, "USR02")
+        .option(SapDataSource.TABLE_READ_FUN_KEY, altTableReadFunctionName)
         .option(SapDataSource.TABLE_FILTER_PUSHDOWN_ENABLED_KEY, "false")
         .load()
 
       val table = baseDF
         .option(SapDataSource.TABLE_KEY, "USR02")
-        .load()
+        .load() 
 
-      val colsAndTypes = table.schema.fields.map(f => (f.name, f.dataType))
+      val colsAndTypes = table.schema.fields
+        .map(f => WhereClauseGen.ColumnTemplate(f.name, f.dataType))
+        .filter(f => f.typ != DateType && f.typ != TimestampType) // TODO
+
+      val colAggsSelect = colsAndTypes.map(cT => collect_list(cT.column).as(cT.name))
+      val valuesRow = noPushDownTable.select(colAggsSelect: _*).collect().head
+      val colsTypesAndValues =colsAndTypes.map { colTemplate =>
+        val idx = valuesRow.fieldIndex(colTemplate.name)
+        colTemplate.copy(realValues = valuesRow.getSeq[Any](idx))
+      }
+
       forAll(
-        WhereClauseGen.generateWhereClause(colsAndTypes)
-        //, minSuccessful(200)
+        WhereClauseGen(colsTypesAndValues),
+        minSuccessful(100)
       ) { whereClause =>
-        println(s"$whereClause")
         table.where(whereClause).select("BNAME").collect().map(_.toString) mustEqual
           noPushDownTable.where(whereClause).select("BNAME").collect().map(_.toString)
       }
