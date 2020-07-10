@@ -31,6 +31,17 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
     }
   }
 
+  private val where = tables.getTable("OPTIONS")
+
+  if (!noData) {
+    println(partition.whereClauseLines.reduceOption(_ ++ _).getOrElse(""))
+
+    partition.whereClauseLines.foreach { whereStr =>
+      where.appendRow()
+      where.setValue("TEXT", whereStr)
+    }
+  }
+
   tableReadFun.execute(dest)
 
   case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
