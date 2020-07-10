@@ -71,24 +71,24 @@ package object sap {
   private val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
   private val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
 
-  def parseAtomicValue(extractedStrValue: String, dataType: DataType): Any =
+  def parseAtomicValue(extractedStrValue: String, maxLen: Int, dataType: DataType): Any =
     try {
       dataType match {
+        case _ if extractedStrValue.forall(_ == '0') && (extractedStrValue.length == maxLen) => null
         case StringType =>
           UTF8String.fromString(extractedStrValue)
+        case _ if extractedStrValue.isEmpty => null
         case IntegerType =>
           extractedStrValue.toInt
         // untested
         case DoubleType =>
           extractedStrValue.toDouble
         //20200629 -> 29-06-2020
-        case DateType if extractedStrValue == "00000000" || extractedStrValue == "" => null
-        case DateType                                                               =>
+        case DateType =>
           // both `millisToDays` and `parse` use the default timezone,
           // so it should match and produce the correct integer seconds value
           DateTimeUtils.millisToDays(sapDateStrFmt.parse(extractedStrValue).getTime)
         // 102050 -> 10:20:50
-        case TimestampType if extractedStrValue == "000000" || extractedStrValue == "" => null
         case TimestampType =>
           val locT = sapTimeStrFmt.parse("1970-01-01 " + extractedStrValue).getTime
           DateTimeUtils.fromMillis(locT)

@@ -110,7 +110,7 @@ class SapSparkDatasourceIntegrationSpec
           BigDecimal.exact(0).setScale(18),
           new Date(new SimpleDateFormat("yyyy-MM-dd").parse("2020-06-29").getTime),
           new Timestamp(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("1970-01-01 10:20:50").getTime),
-          "0000000000000000",
+          null,
           BigDecimal.exact("10101000000").setScale(18)
         ))
     }
