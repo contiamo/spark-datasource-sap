@@ -1,5 +1,7 @@
 package com.contiamo.spark.datasource.sap
 
+import java.sql.{Date, Timestamp}
+
 import org.apache.spark.sql.sources._
 
 import scala.collection.mutable
@@ -51,8 +53,14 @@ object SapTableFilters {
    all its super-expressions must too.
    */
 
-  protected def formatValue(x: Any): Seq[String] =
-    Try(org.apache.spark.sql.catalyst.expressions.Literal(x)).map(_.sql).toOption.toSeq
+  protected def formatValue(x: Any): Seq[String] = x match {
+    case d: Timestamp =>
+      formatValue(sapTimeStrFmt.format(d).dropWhile(_ != ' ').trim)
+    case d: Date =>
+      formatValue(sapDateStrFmt.format(d))
+    case _ =>
+      Try(org.apache.spark.sql.catalyst.expressions.Literal(x)).map(_.sql).toOption.toSeq
+  }
 
   protected def formatBinOp(op: String, attr: String, value: Any): Seq[String] =
     formatValue(value).flatMap(v => Seq.empty :+ "(" :+ attr :+ s" $op " :+ v :+ ")")

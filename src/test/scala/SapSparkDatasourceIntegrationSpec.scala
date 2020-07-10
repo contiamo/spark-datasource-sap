@@ -203,7 +203,6 @@ class SapSparkDatasourceIntegrationSpec
 
       val colsAndTypes = table.schema.fields
         .map(f => WhereClauseGen.ColumnTemplate(f.name, f.dataType))
-        .filter(f => f.typ != DateType && f.typ != TimestampType) // TODO
 
       val colAggsSelect = colsAndTypes.map(cT => collect_list(cT.column).as(cT.name))
       val valuesRow = noPushDownTable.select(colAggsSelect: _*).collect().head

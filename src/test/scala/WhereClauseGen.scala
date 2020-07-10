@@ -49,7 +49,6 @@ object WhereClauseGen {
   }
 
   def genValue(colType: DataType): Gen[Any] = colType match {
-    case StringType => arbitrary[String]
     /*
      According to the spec, we represent even the
      smallest of integral columns as Int, so, when
@@ -57,6 +56,7 @@ object WhereClauseGen {
      */
     case IntegerType    => posNum[Byte]
     case DoubleType     => arbitrary[Double]
+    case StringType     => alphaNumStr // TODO
     case DateType       => arbitrary[JDate].map(d => new Date(d.getTime))
     case _: DecimalType => arbitrary[BigDecimal]
     case _              => Gen.const(null)

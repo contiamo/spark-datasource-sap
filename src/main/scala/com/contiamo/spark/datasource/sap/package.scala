@@ -68,8 +68,8 @@ package object sap {
     case _   => StringType
   }
 
-  private val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
-  private val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
+  protected[sap] val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
+  protected[sap] val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
 
   def parseAtomicValue(extractedStrValue: String, maxLen: Int, dataType: DataType): Any =
     try {
