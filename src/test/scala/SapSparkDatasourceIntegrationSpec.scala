@@ -206,7 +206,7 @@ class SapSparkDatasourceIntegrationSpec
 
       val colAggsSelect = colsAndTypes.map(cT => collect_list(cT.column).as(cT.name))
       val valuesRow = noPushDownTable.select(colAggsSelect: _*).collect().head
-      val colsTypesAndValues =colsAndTypes.map { colTemplate =>
+      val colsTypesAndValues = colsAndTypes.map { colTemplate =>
         val idx = valuesRow.fieldIndex(colTemplate.name)
         colTemplate.copy(realValues = valuesRow.getSeq[Any](idx))
       }
