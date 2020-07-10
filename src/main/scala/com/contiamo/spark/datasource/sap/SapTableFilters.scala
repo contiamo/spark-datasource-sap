@@ -45,6 +45,12 @@ class SapTableFilters(filters: Array[Filter]) {
 object SapTableFilters {
   val sapFilterLenLimit = 72
 
+  /*
+   Empty [[Seq]] here is used as an indication of failure.
+   If any sub-expression is translated into an empty Seq,
+   all its super-expressions must too.
+   */
+
   protected def formatValue(x: Any): Seq[String] =
     Try(org.apache.spark.sql.catalyst.expressions.Literal(x)).map(_.sql).toOption.toSeq
 
@@ -60,19 +66,18 @@ object SapTableFilters {
       Seq.empty
   }
 
-  // TODO breakup long conditions
   protected def generateWhere(filter: Filter): Seq[String] = filter match {
     /*
-    It's impossible to reliably tell a NULL value
-    from a bunch of zeroes in RFC_READ_TABLE output.
-    Therefore its impossible to implement
-    robust push-down for IS (NOT) NULL
+     It's impossible to reliably tell a NULL value
+     from a bunch of zeroes in RFC_READ_TABLE output.
+     Therefore its impossible to implement
+     a robust push-down for IS (NOT) NULL
 
-    case IsNull(attr) =>
-      Seq(s"($attr IS NULL)")
-    case IsNotNull(attr) =>
-      Seq(s"($attr IS NOT NULL)")
-    */
+     So, the intentionally left out filters are:
+     - IsNull
+     - IsNotNull
+     - EqualNullSafe
+     */
 
     case EqualTo(attr, value) =>
       formatBinOp("EQ", attr, value)
@@ -96,6 +101,28 @@ object SapTableFilters {
         "(NOT " +: w :+ ")"
       else
         Seq.empty
+    /*
+     According to some sources, newer versions of SAP
+     support IN natively. Ours doesn't seem to. Anyhow,
+     unrolling it into a bunch of equalities is
+     more compatible.
+     */
+    case In(attr, values) =>
+      val formattedValues = values.map(formatBinOp("EQ", attr, _))
+      if (formattedValues.exists(_.isEmpty))
+        Seq.empty
+      else if (values.isEmpty)
+        Seq.empty
+      else {
+        val ors = formattedValues.tail
+          .foldLeft(formattedValues.head) {
+            case (lparts, rparts) =>
+              lparts ++ Seq(" OR ") ++ rparts
+          }
+
+        "(" +: ors :+ ")"
+      }
+
     case _ =>
       Seq.empty
   }

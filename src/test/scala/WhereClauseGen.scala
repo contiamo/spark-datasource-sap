@@ -15,21 +15,24 @@ object WhereClauseGen {
 
     val genValue: Gen[Any] =
       if (realValues.isEmpty) WhereClauseGen.genValue(typ)
-      else frequency(
-        (5, oneOf(realValues)),
-        (1, WhereClauseGen.genValue(typ))
-      )
+      else
+        frequency(
+          (5, oneOf(realValues)),
+          (1, WhereClauseGen.genValue(typ))
+        )
 
     def genOp: Gen[Column] = {
       val x = column
       val commonOps = oneOf(
         Gen.const(x.isNull),
         Gen.const(x.isNotNull),
-        // Since we treat [[Gen]] as a monad
-        // this is a bit counterintuitive to read.
-        // It will produce:
-        //   x.equalTo(generatedValue)
-        // etc.
+        /*
+         Since we treat [[Gen]] as a monad
+         this is a bit counterintuitive to read.
+         It will produce:
+           x.equalTo(generatedValue)
+         etc.
+         */
         genValue.map(x.equalTo),
         genValue.map(x.notEqual),
         Gen.listOf(genValue).map(x.isInCollection)
@@ -47,9 +50,11 @@ object WhereClauseGen {
 
   def genValue(colType: DataType): Gen[Any] = colType match {
     case StringType => arbitrary[String]
-    // Accorrding to spec, we represent even the smallest
-    // of integral columns as Int, so, when we generate,
-    // we have to pick the smallest
+    /*
+     According to the spec, we represent even the
+     smallest of integral columns as Int, so, when
+     we generate, we have to pick the smallest
+     */
     case IntegerType    => posNum[Byte]
     case DoubleType     => arbitrary[Double]
     case DateType       => arbitrary[JDate].map(d => new Date(d.getTime))
