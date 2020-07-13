@@ -21,15 +21,16 @@ object WhereClauseGen {
           (1, WhereClauseGen.genValue(typ))
         )
 
-    def genLikeValue: Gen[String] = for {
-      wildcard <- oneOf(
-        (s: String) => "%" + s,
-        (s: String) => s + "%",
-        (s: String) => "%" + s + "%",
-        (s: String) => s
-      )
-      v <- genValue
-    } yield wildcard(v.toString)
+    def genLikeValue: Gen[String] =
+      for {
+        wildcard <- oneOf(
+          (s: String) => "%" + s,
+          (s: String) => s + "%",
+          (s: String) => "%" + s + "%",
+          (s: String) => s
+        )
+        v <- genValue
+      } yield wildcard(v.toString.replace("\\", "\\\\"))
 
     def genOp: Gen[Column] = {
       val x = column
@@ -69,7 +70,7 @@ object WhereClauseGen {
      */
     case IntegerType    => posNum[Byte]
     case DoubleType     => arbitrary[Double]
-    case StringType     => alphaNumStr // TODO
+    case StringType     => asciiPrintableStr
     case DateType       => arbitrary[JDate].map(d => new Date(d.getTime))
     case _: DecimalType => arbitrary[BigDecimal]
     case _              => Gen.const(null)

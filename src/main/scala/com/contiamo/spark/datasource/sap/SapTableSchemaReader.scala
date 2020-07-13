@@ -1,6 +1,7 @@
 package com.contiamo.spark.datasource.sap
 
 import com.contiamo.spark.datasource.sap.SapDataSourceReader.TablePartition
+import com.contiamo.spark.datasource.sap.SapTableSchemaReader.ReadTableField
 import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._
 
@@ -42,20 +43,15 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
 
   tableReadFun.execute(dest)
 
-  case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
-    val sparkType: DataType = sapLetterToSparkType(sapTypeName)
-    def structField: StructField = StructField(
-      name,
-      sparkType,
-      metadata = new MetadataBuilder()
-        .putLong("length", length)
-        .build()
-    )
-  }
+  protected lazy val fields: immutable.IndexedSeq[ReadTableField] = SapTableSchemaReader.parseFieldsMetadata(tables)
 
-  protected lazy val fields: immutable.IndexedSeq[ReadTableField] = {
+  override def schema = StructType(fields.map(_.structField))
+}
+
+object SapTableSchemaReader {
+  def parseFieldsMetadata(tableParams: JCoParameterList): immutable.IndexedSeq[ReadTableField] = {
     val fs = collection.mutable.ArrayBuffer.empty[ReadTableField]
-    val fieldsOut = tables.getTable("FIELDS")
+    val fieldsOut = tableParams.getTable("FIELDS")
     val fieldsOutMeta = fieldsOut.getRecordMetaData
     val Seq(nameIdx, offsetIdx, lengthIdx, typeIdx) =
       Seq("FIELDNAME", "OFFSET", "LENGTH", "TYPE").map(fieldsOutMeta.indexOf)
@@ -72,5 +68,14 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
     fs.toIndexedSeq
   }
 
-  override def schema = StructType(fields.map(_.structField))
+  case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
+    val sparkType: DataType = sapLetterToSparkType(sapTypeName)
+    def structField: StructField = StructField(
+      name,
+      sparkType,
+      metadata = new MetadataBuilder()
+        .putLong("length", length)
+        .build()
+    )
+  }
 }

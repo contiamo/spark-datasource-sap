@@ -83,7 +83,8 @@ class SapSparkDatasourceIntegrationSpec
           .load()
 
       val expectedCols = Seq("MANDT", "LANGU", "BNAME")
-      sourceDF.schema.fields must contain allElementsOf expectedCols.map(col => StructField(col, StringType))
+      sourceDF.schema.fields.forall(_.dataType == StringType) mustBe true
+      sourceDF.schema.fields.map(_.name) must contain allElementsOf expectedCols
 
       sourceDF.collect().map(_.mkString).mkString must include(username)
 
@@ -213,7 +214,7 @@ class SapSparkDatasourceIntegrationSpec
 
       forAll(
         WhereClauseGen(colsTypesAndValues),
-        minSuccessful(100)
+        minSuccessful(150)
       ) { whereClause =>
         table.where(whereClause).select("BNAME").collect().map(_.toString) must contain theSameElementsAs
           noPushDownTable.where(whereClause).select("BNAME").collect().map(_.toString)

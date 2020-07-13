@@ -58,23 +58,27 @@ object SapTableFilters {
   type PushdownResult = Either[String, Seq[String]]
 
   case class SapTableFilter(filter: Filter, schema: StructType) {
+
     @tailrec
-    protected final def formatValue(attr: String, x: Any): Either[String, String] = x match {
-      case d: Timestamp =>
-        formatValue(attr, sapTimeStrFmt.format(d).dropWhile(_ != ' ').trim)
-      case d: Date =>
-        formatValue(attr, sapDateStrFmt.format(d))
-      case _ =>
-        // SAP fails on literal values that are larger than corresponding table attributes
-        val fieldLen = Try(schema.apply(attr).metadata.getLong("length")).toOption
-        if (fieldLen.isDefined && x.toString.length > fieldLen.get)
+    protected final def formatValue(attr: String, x: Any): Either[String, String] = {
+      // SAP fails on literal values that are larger than corresponding table attributes
+      val fieldLen = Try(schema.apply(attr).metadata.getLong("length")).toOption
+      x match {
+        case _ if (fieldLen.isDefined && x.toString.length > fieldLen.get) =>
           Left(s"'$x' is wider than ${fieldLen.get}")
-        else
+        case d: Timestamp =>
+          formatValue(attr, sapTimeStrFmt.format(d).dropWhile(_ != ' ').trim)
+        case d: Date =>
+          formatValue(attr, sapDateStrFmt.format(d))
+        case s: String =>
+          Right("'" + s.replace("'", "''") + "'")
+        case _ =>
           Try(org.apache.spark.sql.catalyst.expressions.Literal(x))
             .map(_.sql)
             .toEither
             .left
             .map(_.getMessage)
+      }
     }
 
     protected def formatBinOp(op: String, attr: String, value: Any): PushdownResult =
