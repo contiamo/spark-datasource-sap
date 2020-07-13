@@ -57,7 +57,7 @@ package object sap {
   def sapLetterToSparkType(typeCode: String): DataType = typeCode.toLowerCase match {
     case "c" => StringType
     case "n" => StringType
-    case "x" => StringType // it seems they are just strings when coming from RFC_READ_TABLE
+    case "x" => BinaryType
     case "p" => DecimalType.SYSTEM_DEFAULT // BCD
     case "i" => IntegerType
     case "b" => IntegerType
@@ -65,18 +65,20 @@ package object sap {
     case "f" => DoubleType
     case "d" => DateType
     case "t" => TimestampType
-    case _   => StringType
+    case _   => BinaryType
   }
 
   protected[sap] val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
   protected[sap] val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
 
-  def parseAtomicValue(extractedStrValue: String, maxLen: Int, dataType: DataType): Any =
+  def parseAtomicValue(extractedStrValue: String, byteValue: Array[Byte], maxLen: Int, dataType: DataType): Any =
     try {
       dataType match {
         case _ if extractedStrValue.forall(_ == '0') && (extractedStrValue.length == maxLen) => null
         case StringType =>
           UTF8String.fromString(extractedStrValue)
+        case BinaryType =>
+          byteValue
         case _ if extractedStrValue.isEmpty => null
         case IntegerType =>
           extractedStrValue.toInt

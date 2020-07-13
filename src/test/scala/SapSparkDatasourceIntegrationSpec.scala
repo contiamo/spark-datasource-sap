@@ -215,7 +215,7 @@ class SapSparkDatasourceIntegrationSpec
         WhereClauseGen(colsTypesAndValues),
         minSuccessful(100)
       ) { whereClause =>
-        table.where(whereClause).select("BNAME").collect().map(_.toString) mustEqual
+        table.where(whereClause).select("BNAME").collect().map(_.toString) must contain theSameElementsAs
           noPushDownTable.where(whereClause).select("BNAME").collect().map(_.toString)
       }
     }

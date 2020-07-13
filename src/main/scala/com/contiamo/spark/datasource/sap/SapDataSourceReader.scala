@@ -121,7 +121,7 @@ object SapDataSourceReader {
 
           override def pruneColumns(requiredSchema: StructType): Unit = { requiredColumns = Some(requiredSchema) }
           override def pushFilters(filters: Array[Filter]): Array[Filter] = {
-            tableFilters = SapTableFilters(filters)
+            tableFilters = SapTableFilters(filters, schemaReader.schema)
             tableFilters.rejected
           }
           override def pushedFilters: Array[Filter] = tableFilters.pushed

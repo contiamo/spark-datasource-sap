@@ -44,7 +44,13 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
 
   case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
     val sparkType: DataType = sapLetterToSparkType(sapTypeName)
-    def structField: StructField = StructField(name, sparkType)
+    def structField: StructField = StructField(
+      name,
+      sparkType,
+      metadata = new MetadataBuilder()
+        .putLong("length", length)
+        .build()
+    )
   }
 
   protected lazy val fields: immutable.IndexedSeq[ReadTableField] = {

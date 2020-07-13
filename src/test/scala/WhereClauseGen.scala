@@ -21,6 +21,16 @@ object WhereClauseGen {
           (1, WhereClauseGen.genValue(typ))
         )
 
+    def genLikeValue: Gen[String] = for {
+      wildcard <- oneOf(
+        (s: String) => "%" + s,
+        (s: String) => s + "%",
+        (s: String) => "%" + s + "%",
+        (s: String) => s
+      )
+      v <- genValue
+    } yield wildcard(v.toString)
+
     def genOp: Gen[Column] = {
       val x = column
       val commonOps = oneOf(
@@ -35,7 +45,8 @@ object WhereClauseGen {
          */
         genValue.map(x.equalTo),
         genValue.map(x.notEqual),
-        Gen.listOf(genValue).map(x.isInCollection)
+        // Spark throws an NPE when you do IN (1, 2, NULL)
+        Gen.listOf(genValue.suchThat(_ != null)).map(x.isInCollection)
       )
       val orderedOps = oneOf(
         genValue.map(x.leq),
@@ -43,7 +54,9 @@ object WhereClauseGen {
         genValue.map(x.lt),
         genValue.map(x.gt)
       )
-      if (typ == StringType) commonOps
+      val strOps = genLikeValue.map(x.like)
+
+      if (typ == StringType) oneOf(commonOps, strOps)
       else oneOf(commonOps, orderedOps)
     }
   }
