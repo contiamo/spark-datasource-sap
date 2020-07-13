@@ -42,14 +42,14 @@ class SapTableFilters(filters: Array[Filter], schema: StructType) {
 
     lines.toSeq
   }
-
+  
   /* potentially useful for debugging in the future
   whereClauseLines.reduceOption(_ ++ _).foreach(pd => println(s"Pushed: " + pd))
 
   rejected_.foreach { f =>
     println(s"Not pushed down: ${f.whereClauseLines.left.get}")
   }
-  */
+ */
 }
 
 object SapTableFilters {
