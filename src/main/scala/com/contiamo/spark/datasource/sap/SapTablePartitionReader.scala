@@ -12,17 +12,23 @@ class SapTablePartitionReader(partition: TablePartition)
 
   private val currentRow = new SpecificInternalRow(schema)
   private val data = tables.getTable("DATA")
+  private var firstRow = true
 
-  data.firstRow()
-
-  override def next(): Boolean = data.nextRow()
+  override def next(): Boolean =
+    if (firstRow) {
+      data.firstRow()
+      firstRow = false
+      !data.isEmpty
+    } else
+      data.nextRow()
 
   override def get(): InternalRow = {
     val rowStr = data.getString(0)
     for (fieldDesc <- fields) {
       val fieldEnd = rowStr.length min (fieldDesc.offset + fieldDesc.length)
       val strValue = rowStr.substring(fieldDesc.offset, fieldEnd).trim
-      val sparkValue = parseAtomicValue(strValue, fieldDesc.sparkType)
+      val byteValue = data.getByteArray(0).slice(fieldDesc.offset, fieldEnd)
+      val sparkValue = parseAtomicValue(strValue, byteValue, fieldDesc.length, fieldDesc.sparkType)
       currentRow.update(fieldDesc.idx, sparkValue)
     }
 

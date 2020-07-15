@@ -1,20 +1,18 @@
-import org.apache.spark.sql.types._
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.must
+import java.sql.{Date, Timestamp}
+import java.text.SimpleDateFormat
 
-import scala.language.postfixOps
 import com.contiamo.spark.datasource.sap.{SapDataSource, SapDataSourceReader, SapSparkDestinationDataProvider}
 import com.sap.conn.jco.JCoDestinationManager
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Column
+import org.apache.spark.sql.types._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.must
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
 import scala.util.Try
-import java.sql.Date
-import java.sql.Timestamp
-import java.text.SimpleDateFormat
-import java.time.LocalDate
-import org.scalatest.prop.TableDrivenPropertyChecks._
 
 object SapSparkDatasourceIntegrationSpec {
   case class Partner(client: String,
@@ -26,10 +24,14 @@ object SapSparkDatasourceIntegrationSpec {
                      valid_from: BigDecimal)
 }
 
-class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTestWrapper with must.Matchers {
-  import spark.implicits._
-  import org.apache.spark.sql.functions.col
+class SapSparkDatasourceIntegrationSpec
+    extends AnyFunSpec
+    with SparkSessionTestWrapper
+    with must.Matchers
+    with ScalaCheckPropertyChecks {
   import SapSparkDatasourceIntegrationSpec._
+  import org.apache.spark.sql.functions.{col, collect_list}
+  import spark.implicits._
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
   private val altTableReadFunctionName = conf.getString("alt-table-read-fun")
@@ -66,10 +68,10 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       }
     }
 
-  private def userGetDetailCall(options: Map[String, String] = Map.empty) =
+  private def userGetDetailCall(options: Map[String, String] = Map.empty, user: String = username) =
     baseDF
       .option(SapDataSource.BAPI_KEY, "BAPI_USER_GET_DETAIL")
-      .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + username + "\"}")
+      .option(SapDataSource.BAPI_ARGS_KEY, "{\"USERNAME\":\"" + user + "\"}")
       .options(options)
       .load()
 
@@ -81,7 +83,8 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
           .load()
 
       val expectedCols = Seq("MANDT", "LANGU", "BNAME")
-      sourceDF.schema.fields must contain allElementsOf expectedCols.map(col => StructField(col, StringType))
+      sourceDF.schema.fields.forall(_.dataType == StringType) mustBe true
+      sourceDF.schema.fields.map(_.name) must contain allElementsOf expectedCols
 
       sourceDF.collect().map(_.mkString).mkString must include(username)
 
@@ -108,7 +111,7 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
           BigDecimal.exact(0).setScale(18),
           new Date(new SimpleDateFormat("yyyy-MM-dd").parse("2020-06-29").getTime),
           new Timestamp(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("1970-01-01 10:20:50").getTime),
-          "0000000000000000",
+          null,
           BigDecimal.exact("10101000000").setScale(18)
         ))
     }
@@ -128,6 +131,9 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
           .option(SapDataSource.TABLE_KEY, "USR02")
           .load()
 
+      // built-in RFC_READ_TABLE is not able to select * from this
+      // table so, this tests both deserialization of several types
+      // and projection pushdown
       sourceDF
         .select(
           col("BNAME").as[String],
@@ -155,12 +161,64 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
       resultStr must include(username)
       resultStr.length mustBe >(1000)
 
+      // alt function doensn't fail on projection pushdown
       sourceDF
         .select(
           col("BNAME").as[String],
           col("PWDSTATE").as[Int]
         )
         .collect() must contain(username, 0)
+    }
+
+    it("joins USR01 with USR02") {
+      val t1 = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR01")
+        .load()
+
+      val t2 = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .load()
+
+      t1.join(t2, Seq("MANDT", "BNAME"))
+        .select(
+          col("BNAME").as[String],
+          col("MANDT").as[String],
+          col("LANGU").as[String],
+          col("PWDSTATE").as[Int]
+        )
+        .where(col("BNAME") === username)
+        .collect()
+        .length mustEqual 1
+    }
+
+    it("handles filter pushdown") {
+      val noPushDownTable = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .option(SapDataSource.TABLE_READ_FUN_KEY, altTableReadFunctionName)
+        .option(SapDataSource.TABLE_FILTER_PUSHDOWN_ENABLED_KEY, "false")
+        .load()
+
+      val table = baseDF
+        .option(SapDataSource.TABLE_KEY, "USR02")
+        .load()
+
+      val colsAndTypes = table.schema.fields
+        .map(f => WhereClauseGen.ColumnTemplate(f.name, f.dataType))
+
+      val colAggsSelect = colsAndTypes.map(cT => collect_list(cT.column).as(cT.name))
+      val valuesRow = noPushDownTable.select(colAggsSelect: _*).collect().head
+      val colsTypesAndValues = colsAndTypes.map { colTemplate =>
+        val idx = valuesRow.fieldIndex(colTemplate.name)
+        colTemplate.copy(realValues = valuesRow.getSeq[Any](idx))
+      }
+
+      forAll(
+        WhereClauseGen(colsTypesAndValues),
+        minSuccessful(150)
+      ) { whereClause =>
+        table.where(whereClause).select("BNAME").collect().map(_.toString) must contain theSameElementsAs
+          noPushDownTable.where(whereClause).select("BNAME").collect().map(_.toString)
+      }
     }
   }
 
@@ -378,9 +436,4 @@ class SapSparkDatasourceIntegrationSpec extends AnyFunSpec with SparkSessionTest
 
     }
   }
-
-  /* TODO don't forget to test
-    - multiple table
-    - assert projection pushdowns
- */
 }
