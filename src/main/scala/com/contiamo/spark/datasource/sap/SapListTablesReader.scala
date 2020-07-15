@@ -51,20 +51,7 @@ class SapListTablesReader(partition: ListTablesPartition)
       imports.setValue("NO_DATA", "Y")
       tableReadFun.execute(dest)
 
-      val fieldsOut = tables.getTable("FIELDS")
-      val fieldsOutMeta = fieldsOut.getRecordMetaData
-      val nameIdx = fieldsOutMeta.indexOf("FIELDNAME")
-      val typeIdx = fieldsOutMeta.indexOf("TYPE")
-
-      fieldsOut.firstRow()
-      do {
-        val fieldDesc = StructField(
-          fieldsOut.getString(nameIdx),
-          sapLetterToSparkType(fieldsOut.getString(typeIdx))
-        )
-        fs.append(fieldDesc)
-      } while (fieldsOut.nextRow())
-      val tableSchema = StructType(fs.toIndexedSeq).json
+      val tableSchema = StructType(SapTableSchemaReader.parseFieldsMetadata(tables).map(_.structField)).json
 
       currentRow.update(0, UTF8String.fromString(table))
       currentRow.update(1, UTF8String.fromString(tableSchema))

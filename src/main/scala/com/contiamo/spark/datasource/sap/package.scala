@@ -57,7 +57,7 @@ package object sap {
   def sapLetterToSparkType(typeCode: String): DataType = typeCode.toLowerCase match {
     case "c" => StringType
     case "n" => StringType
-    case "x" => StringType // it seems they are just strings when coming from RFC_READ_TABLE
+    case "x" => BinaryType
     case "p" => DecimalType.SYSTEM_DEFAULT // BCD
     case "i" => IntegerType
     case "b" => IntegerType
@@ -65,30 +65,32 @@ package object sap {
     case "f" => DoubleType
     case "d" => DateType
     case "t" => TimestampType
-    case _   => StringType
+    case _   => BinaryType
   }
 
-  private val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
-  private val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
+  protected[sap] val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
+  protected[sap] val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
 
-  def parseAtomicValue(extractedStrValue: String, dataType: DataType): Any =
+  def parseAtomicValue(extractedStrValue: String, byteValue: Array[Byte], maxLen: Int, dataType: DataType): Any =
     try {
       dataType match {
+        case _ if extractedStrValue.forall(_ == '0') && (extractedStrValue.length == maxLen) => null
         case StringType =>
           UTF8String.fromString(extractedStrValue)
+        case BinaryType =>
+          byteValue
+        case _ if extractedStrValue.isEmpty => null
         case IntegerType =>
           extractedStrValue.toInt
         // untested
         case DoubleType =>
           extractedStrValue.toDouble
         //20200629 -> 29-06-2020
-        case DateType if extractedStrValue == "00000000" || extractedStrValue == "" => null
-        case DateType                                                               =>
+        case DateType =>
           // both `millisToDays` and `parse` use the default timezone,
           // so it should match and produce the correct integer seconds value
           DateTimeUtils.millisToDays(sapDateStrFmt.parse(extractedStrValue).getTime)
         // 102050 -> 10:20:50
-        case TimestampType if extractedStrValue == "000000" || extractedStrValue == "" => null
         case TimestampType =>
           val locT = sapTimeStrFmt.parse("1970-01-01 " + extractedStrValue).getTime
           DateTimeUtils.fromMillis(locT)
