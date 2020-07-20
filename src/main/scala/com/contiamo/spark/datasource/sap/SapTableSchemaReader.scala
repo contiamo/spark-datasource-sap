@@ -6,6 +6,7 @@ import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._
 
 import scala.collection.immutable
+import scala.util.Try
 import scala.util.chaining._
 
 class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends SapSchemaReader {
@@ -41,7 +42,13 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
     }
   }
 
-  tableReadFun.execute(dest)
+  try tableReadFun.execute(dest)
+  catch {
+    case abapException: com.sap.conn.jco.AbapException if abapException.getMessage.contains("DATA_BUFFER_EXCEEDED") =>
+      throw new SapReadTableBufferExceededException(partition.tableName, abapException)
+    case anotherException =>
+      throw anotherException
+  }
 
   protected lazy val fields: immutable.IndexedSeq[ReadTableField] = SapTableSchemaReader.parseFieldsMetadata(tables)
 
