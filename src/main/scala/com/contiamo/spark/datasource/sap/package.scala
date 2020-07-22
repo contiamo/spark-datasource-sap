@@ -25,6 +25,14 @@ package object sap {
   class SapEntityNotFoundException(entityType: String, name: String)
       extends SapDataSourceException(s"$entityType $name not found.")
 
+  class SapReadTableBufferExceededException(table: String, cause: com.sap.conn.jco.AbapException)
+      extends SapDataSourceException(
+        s"""Selected columns of table '$table' do not fit into a configured read buffer.
+            |Please, either select a smaller subset of columns, or configure a custom read table function.
+            |""".stripMargin,
+        cause
+      )
+
   class RFCNotFoundException(name: String) extends SapEntityNotFoundException("SAP RFC", name)
 
   class InvalidConfigurationException(message: String) extends SapDataSourceException(message)

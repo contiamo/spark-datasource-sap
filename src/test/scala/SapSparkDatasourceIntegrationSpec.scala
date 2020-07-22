@@ -148,7 +148,7 @@ class SapSparkDatasourceIntegrationSpec
     // this test relies on the ZST5_READ_TABLE2 function to be present
     // in the target SAP test system. To create one, consult with
     // https://rfcconnector.com/documentation/kb/0007/
-    it("reads a SAP USR02 table with alternative read function") {
+    it("reads very wide SAP USR02 table with alternative read function") {
       val sourceDF =
         baseDF
           .option(SapDataSource.TABLE_KEY, "USR02")
@@ -168,6 +168,17 @@ class SapSparkDatasourceIntegrationSpec
           col("PWDSTATE").as[Int]
         )
         .collect() must contain(username, 0)
+    }
+
+    it("fails to read a very wide SAP table with a human readable message") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.TABLE_KEY, "USR02")
+          .load()
+
+      val res = Try(sourceDF.collect()).toEither
+      res.isLeft mustBe true
+      res.left.get.getMessage must (include("USR02") and include("select a smaller subset of columns"))
     }
 
     it("joins USR01 with USR02") {
