@@ -46,8 +46,6 @@ class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends S
   catch {
     case abapException: com.sap.conn.jco.AbapException if abapException.getMessage.contains("DATA_BUFFER_EXCEEDED") =>
       throw new SapReadTableBufferExceededException(partition.tableName, abapException)
-    case anotherException =>
-      throw anotherException
   }
 
   protected lazy val fields: immutable.IndexedSeq[ReadTableField] = SapTableSchemaReader.parseFieldsMetadata(tables)
