@@ -20,7 +20,7 @@ object SapSparkDatasourceIntegrationSpec {
                      mem_house: BigDecimal,
                      crdat: Date,
                      crtim: Timestamp,
-                     db_key: String,
+                     partner_guid: String,
                      valid_from: BigDecimal)
 }
 
@@ -102,7 +102,7 @@ class SapSparkDatasourceIntegrationSpec
           .load()
 
       sourceDF
-        .select("CLIENT", "MEM_HOUSE", "BIRTHDT", "CRDAT", "CRTIM", "DB_KEY", "VALID_FROM")
+        .select("CLIENT", "MEM_HOUSE", "BIRTHDT", "CRDAT", "CRTIM", "PARTNER_GUID", "VALID_FROM")
         .as[Partner]
         .collect() must contain(
         Partner(
@@ -111,7 +111,7 @@ class SapSparkDatasourceIntegrationSpec
           BigDecimal.exact(0).setScale(18),
           new Date(new SimpleDateFormat("yyyy-MM-dd").parse("2020-06-29").getTime),
           new Timestamp(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("1970-01-01 10:20:50").getTime),
-          null,
+          "000C29145EA41EDA",
           BigDecimal.exact("10101000000").setScale(18)
         ))
     }

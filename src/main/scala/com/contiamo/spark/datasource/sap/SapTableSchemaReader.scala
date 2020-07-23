@@ -73,13 +73,17 @@ object SapTableSchemaReader {
     fs.toIndexedSeq
   }
 
+  val SAP_TYPE_NAME_KEY = "sap-typename"
+  val TYPE_LENGTH_KEY = "length"
+
   case class ReadTableField(idx: Int, name: String, offset: Int, length: Int, sapTypeName: String) {
     val sparkType: DataType = sapLetterToSparkType(sapTypeName)
     def structField: StructField = StructField(
       name,
       sparkType,
       metadata = new MetadataBuilder()
-        .putLong("length", length)
+        .putLong(TYPE_LENGTH_KEY, length)
+        .putString(SAP_TYPE_NAME_KEY, sapTypeName)
         .build()
     )
   }
