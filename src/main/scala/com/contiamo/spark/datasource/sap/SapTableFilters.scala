@@ -72,11 +72,11 @@ object SapTableFilters {
           formatValue(attr, sapTimeStrFmt.format(d).dropWhile(_ != ' ').trim)
         case d: Date =>
           formatValue(attr, sapDateStrFmt.format(d))
-        case s: String if fieldLen.isDefined && s.length > fieldLen.get=>
+        case s: String if fieldLen.isDefined && s.length > fieldLen.get =>
           Left(s"'$s' is wider than ${fieldLen.get}")
         case s: String =>
           Right("'" + s.replace("'", "''") + "'")
-        case _ if fieldLen.isDefined && x.toString.length > fieldLen.get=>
+        case _ if fieldLen.isDefined && x.toString.length > fieldLen.get =>
           Left(s"'$x' is wider than ${fieldLen.get}")
         case _ =>
           Try(org.apache.spark.sql.catalyst.expressions.Literal(x))
