@@ -56,7 +56,7 @@ package object sap {
     case JCoMetaData.TYPE_DECF16  => DecimalType.SYSTEM_DEFAULT
     case JCoMetaData.TYPE_DECF34  => DecimalType.SYSTEM_DEFAULT
     case JCoMetaData.TYPE_STRING  => StringType
-    case JCoMetaData.TYPE_XSTRING => BinaryType
+    case JCoMetaData.TYPE_XSTRING => StringType
     case JCoMetaData.TYPE_BCD =>
       createDecimalType(bcdDecimalPrecision, bcdDecimalPrecision min DecimalType.MAX_SCALE)
     case _ => StringType
@@ -65,7 +65,7 @@ package object sap {
   def sapLetterToSparkType(typeCode: String): DataType = typeCode.toLowerCase match {
     case "c" => StringType
     case "n" => StringType
-    case "x" => BinaryType
+    case "x" => StringType
     case "p" => DecimalType.SYSTEM_DEFAULT // BCD
     case "i" => IntegerType
     case "b" => IntegerType
@@ -73,20 +73,18 @@ package object sap {
     case "f" => DoubleType
     case "d" => DateType
     case "t" => TimestampType
-    case _   => BinaryType
+    case _   => StringType
   }
 
   protected[sap] val sapDateStrFmt = new SimpleDateFormat("yyyyMMdd")
   protected[sap] val sapTimeStrFmt = new SimpleDateFormat("yyyy-MM-dd HHmmss")
 
-  def parseAtomicValue(extractedStrValue: String, byteValue: Array[Byte], maxLen: Int, dataType: DataType): Any =
+  def parseAtomicValue(extractedStrValue: String, maxLen: Int, dataType: DataType): Any =
     try {
       dataType match {
         case _ if extractedStrValue.forall(_ == '0') && (extractedStrValue.length == maxLen) => null
         case StringType =>
           UTF8String.fromString(extractedStrValue)
-        case BinaryType =>
-          byteValue
         case _ if extractedStrValue.isEmpty => null
         case IntegerType =>
           extractedStrValue.toInt

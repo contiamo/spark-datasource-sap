@@ -61,17 +61,23 @@ object SapTableFilters {
 
     @tailrec
     protected final def formatValue(attr: String, x: Any): Either[String, String] = {
+      val attrMeta = schema.apply(attr).metadata
       // SAP fails on literal values that are larger than corresponding table attributes
-      val fieldLen = Try(schema.apply(attr).metadata.getLong("length")).toOption
+      val fieldLen = Try(attrMeta.getLong(SapTableSchemaReader.TYPE_LENGTH_KEY)).toOption
+      val fieldSapType = attrMeta.getString(SapTableSchemaReader.SAP_TYPE_NAME_KEY)
       x match {
-        case _ if (fieldLen.isDefined && x.toString.length > fieldLen.get) =>
-          Left(s"'$x' is wider than ${fieldLen.get}")
+        case _ if fieldSapType.toLowerCase == "x" =>
+          Left("filter push down is not supported for binary values")
         case d: Timestamp =>
           formatValue(attr, sapTimeStrFmt.format(d).dropWhile(_ != ' ').trim)
         case d: Date =>
           formatValue(attr, sapDateStrFmt.format(d))
+        case s: String if fieldLen.isDefined && s.length > fieldLen.get =>
+          Left(s"'$s' is wider than ${fieldLen.get}")
         case s: String =>
           Right("'" + s.replace("'", "''") + "'")
+        case _ if fieldLen.isDefined && x.toString.length > fieldLen.get =>
+          Left(s"'$x' is wider than ${fieldLen.get}")
         case _ =>
           Try(org.apache.spark.sql.catalyst.expressions.Literal(x))
             .map(_.sql)
