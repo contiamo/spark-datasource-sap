@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceReader.TablePartition
+import com.contiamo.spark.datasource.sap.SapDataSourceTableReader.Partition
 import com.contiamo.spark.datasource.sap.SapTableSchemaReader.ReadTableField
 import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._
@@ -9,7 +9,7 @@ import scala.collection.immutable
 import scala.util.Try
 import scala.util.chaining._
 
-class SapTableSchemaReader(partition: TablePartition, noData: Boolean) extends SapSchemaReader {
+class SapTableSchemaReader(partition: Partition, noData: Boolean) extends SapSchemaReader {
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
   protected val jcoTableReadFunName = partition.jcoTableReadFunName

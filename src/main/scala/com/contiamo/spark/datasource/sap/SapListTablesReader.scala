@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceReader.ListTablesPartition
+import com.contiamo.spark.datasource.sap.SapDataSourceListTablesReader.Partition
 import com.sap.conn.jco.{JCoFunction, JCoFunctionTemplate, JCoParameterList}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
@@ -10,7 +10,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import scala.util.chaining._
 
-class SapListTablesReader(partition: ListTablesPartition)
+class SapListTablesReader(partition: Partition)
     extends SapSchemaReader
     with InputPartitionReader[InternalRow] {
   import org.json4s.JsonDSL._
