@@ -9,9 +9,7 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
-trait SapDataSourceBaseReader
-    extends DataSourceReader
-    with SupportsPushDownRequiredColumns {
+trait SapDataSourceBaseReader extends DataSourceReader with SupportsPushDownRequiredColumns {
 
   def options: OptionsMap
 
