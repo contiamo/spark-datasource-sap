@@ -9,9 +9,9 @@ class SapDataSource extends DataSourceV2 with ReadSupport {
   override def createReader(optionsJava: DataSourceOptions): DataSourceReader = {
     val options = optionsJava.asMap.asScala.toMap
 
-    SapDataSourceTableReader(options)
-      .orElse(SapDataSourceBapiReader(options))
-      .orElse(SapDataSourceListTablesReader(options))
+    SapTableReader(options)
+      .orElse(SapBapiReader(options))
+      .orElse(SapListTablesReader(options))
       .getOrElse(throw new InvalidConfigurationException("no TABLE, BAPI or metadata configuration was provided"))
   }
 }

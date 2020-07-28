@@ -1,13 +1,13 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceBapiReader.Partition
+import com.contiamo.spark.datasource.sap.SapBapiReader.Partition
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
 import org.apache.spark.sql.types.StructType
 import org.json4s.{DefaultFormats, _}
 import org.json4s.jackson.JsonMethods._
 
-class SapDataSourceBapiReader(bapiName: String, override val options: OptionsMap) extends SapDataSourceBaseReader {
+class SapBapiReader(bapiName: String, override val options: OptionsMap) extends SapDataSourceBaseReader {
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   private val bapiArgsStr = options.getOrElse(SapDataSource.BAPI_ARGS_KEY, "{}")
@@ -29,7 +29,7 @@ class SapDataSourceBapiReader(bapiName: String, override val options: OptionsMap
   override def pruneColumns(requiredSchema: StructType): Unit = { requiredColumns = Some(requiredSchema) }
 }
 
-object SapDataSourceBapiReader {
+object SapBapiReader {
   case class Partition(funName: String,
                        bapiArgs: Map[String, JValue],
                        bapiOutputTable: Option[String],
@@ -41,5 +41,5 @@ object SapDataSourceBapiReader {
   }
 
   def apply(options: OptionsMap): Option[SapDataSourceBaseReader] =
-    options.get(SapDataSource.BAPI_KEY).map(new SapDataSourceBapiReader(_, options))
+    options.get(SapDataSource.BAPI_KEY).map(new SapBapiReader(_, options))
 }

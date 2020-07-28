@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceTableReader.Partition
+import com.contiamo.spark.datasource.sap.SapTableReader.Partition
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
 import org.apache.spark.sql.sources.v2.reader.InputPartitionReader

@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceTableReader.Partition
+import com.contiamo.spark.datasource.sap.SapTableReader.Partition
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.sources.v2.reader.{InputPartitionReader, SupportsPushDownFilters}
@@ -8,7 +8,7 @@ import org.apache.spark.sql.types.StructType
 
 import scala.util.Try
 
-class SapDataSourceTableReader(tableName: String, override val options: OptionsMap)
+class SapTableReader(tableName: String, override val options: OptionsMap)
     extends SapDataSourceBaseReader
     with SupportsPushDownFilters {
   private var requiredColumns: Option[StructType] = None
@@ -35,7 +35,7 @@ class SapDataSourceTableReader(tableName: String, override val options: OptionsM
   override def pushedFilters: Array[Filter] = tableFilters.pushed
 }
 
-object SapDataSourceTableReader {
+object SapTableReader {
   case class Partition(tableName: String,
                        requiredColumns: Option[StructType],
                        whereClauseLines: Seq[String],
@@ -48,6 +48,6 @@ object SapDataSourceTableReader {
 
   def apply(options: OptionsMap): Option[SapDataSourceBaseReader] =
     options.get(SapDataSource.TABLE_KEY).map { tableName =>
-      new SapDataSourceTableReader(tableName, options)
+      new SapTableReader(tableName, options)
     }
 }

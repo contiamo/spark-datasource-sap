@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceTableReader.Partition
+import com.contiamo.spark.datasource.sap.SapTableReader.Partition
 import com.contiamo.spark.datasource.sap.SapTableSchemaReader.ReadTableField
 import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._

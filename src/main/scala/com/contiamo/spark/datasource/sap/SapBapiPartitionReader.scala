@@ -1,6 +1,6 @@
 package com.contiamo.spark.datasource.sap
 
-import com.contiamo.spark.datasource.sap.SapDataSourceBapiReader.Partition
+import com.contiamo.spark.datasource.sap.SapBapiReader.Partition
 import com.sap.conn.jco.{JCoMetaData, JCoParameterList, JCoRecord}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
