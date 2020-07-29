@@ -16,8 +16,12 @@ import java.time.LocalTime
 import java.util.TimeZone
 
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.sources.v2.reader.InputPartition
 
 package object sap {
+  type OptionsMap = Map[String, String]
+  type SapInputPartition = InputPartition[InternalRow]
+
   class SapDataSourceException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
     def this(msg: String) = this(msg, null)
   }
