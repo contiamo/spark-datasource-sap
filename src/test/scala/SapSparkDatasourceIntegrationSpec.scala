@@ -1,7 +1,7 @@
 import java.sql.{Date, Timestamp}
 import java.text.SimpleDateFormat
 
-import com.contiamo.spark.datasource.sap.{SapDataSource, SapDataSourceReader, SapSparkDestinationDataProvider}
+import com.contiamo.spark.datasource.sap.{SapDataSource, SapSparkDestinationDataProvider}
 import com.sap.conn.jco.JCoDestinationManager
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Column
@@ -43,7 +43,7 @@ class SapSparkDatasourceIntegrationSpec
   /* warm-up JCo connection in case the SAP system needs
      time before its starts accepting connections.
    */
-  private val jcoDestKey = SapSparkDestinationDataProvider.register(SapDataSourceReader.extractJcoOptions(jcoOptions))
+  private val jcoDestKey = SapSparkDestinationDataProvider.register(SapDataSource.extractJcoOptions(jcoOptions))
   private val jcoDest = JCoDestinationManager.getDestination(jcoDestKey)
   Try(jcoDest.ping())
 
