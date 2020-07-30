@@ -59,7 +59,7 @@ class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader 
           println(schema.prettyJson)
         }
       }
-      */
+       */
 
       currentRow.update(0, UTF8String.fromString(bapiName))
       currentRow.update(1, UTF8String.fromString(defaultSchemaJson))
