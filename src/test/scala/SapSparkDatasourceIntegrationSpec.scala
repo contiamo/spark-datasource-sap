@@ -4,8 +4,8 @@ import java.text.SimpleDateFormat
 import com.contiamo.spark.datasource.sap.{SapDataSource, SapSparkDestinationDataProvider}
 import com.sap.conn.jco.JCoDestinationManager
 import com.typesafe.config.ConfigFactory
-import org.apache.spark.sql.Column
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Column, DataFrameReader}
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -29,9 +29,13 @@ class SapSparkDatasourceIntegrationSpec
     with SparkSessionTestWrapper
     with must.Matchers
     with ScalaCheckPropertyChecks {
+
   import SapSparkDatasourceIntegrationSpec._
   import org.apache.spark.sql.functions.{col, collect_list}
+  import org.json4s._
+  import org.json4s.jackson.JsonMethods._
   import spark.implicits._
+  implicit val formats = DefaultFormats
 
   private val conf = ConfigFactory.load.getConfig("spark-sap-test")
   private val altTableReadFunctionName = conf.getString("alt-table-read-fun")
@@ -47,20 +51,20 @@ class SapSparkDatasourceIntegrationSpec
   private val jcoDest = JCoDestinationManager.getDestination(jcoDestKey)
   Try(jcoDest.ping())
 
-  val format = classOf[SapDataSource].getName
+  private val format = classOf[SapDataSource].getName
 
-  def baseDF =
+  def baseDF: DataFrameReader =
     spark.read
       .format(format)
       .options(jcoOptions)
 
-  val username = jcoOptions("jco.client.user")
+  private val username = jcoOptions("jco.client.user")
 
   private def flattenSchema(schema: StructType, prefix: String = null): Array[Column] =
     schema.fields.flatMap { f =>
       val colName =
         if (prefix == null) f.name
-        else (prefix + "." + f.name)
+        else prefix + "." + f.name
 
       f.dataType match {
         case st: StructType => flattenSchema(st, colName)
@@ -176,9 +180,9 @@ class SapSparkDatasourceIntegrationSpec
           .option(SapDataSource.TABLE_KEY, "USR02")
           .load()
 
-      val res = Try(sourceDF.collect()).toEither
-      res.isLeft mustBe true
-      res.left.get.getMessage must (include("USR02") and include("select a smaller subset of columns"))
+      val res = Try(sourceDF.collect())
+      res.isFailure mustBe true
+      res.failed.get.getMessage must (include("USR02") and include("select a smaller subset of columns"))
     }
 
     it("joins USR01 with USR02") {
@@ -235,10 +239,6 @@ class SapSparkDatasourceIntegrationSpec
 
   describe("list tables dataframe") {
     it("lists schemas for multiple tables") {
-      import org.json4s._
-      import org.json4s.jackson.JsonMethods._
-      implicit val formats = DefaultFormats
-
       val tableReadFunctions = Table(
         "TABALE_READ_FUN",
         None,
@@ -281,9 +281,9 @@ class SapSparkDatasourceIntegrationSpec
           .option(SapDataSource.LIST_TABLES_KEY, """["USR01", "BAZINGA"]""")
           .load()
 
-      val res = Try(sourceDF.collect()).toEither
-      res.isLeft mustBe true
-      res.left.get.getMessage must (include("TABLE_NOT_AVAILABLE") and include("BAZINGA"))
+      val res = Try(sourceDF.collect())
+      res.isFailure mustBe true
+      res.failed.get.getMessage must (include("TABLE_NOT_AVAILABLE") and include("BAZINGA"))
     }
   }
 
@@ -355,7 +355,7 @@ class SapSparkDatasourceIntegrationSpec
         // but we can assert that the result is non-trivial
         val res = flatDf.collect()
         res.length mustBe 1
-        res.head.mkString("") must not equal ("")
+        res.head.mkString("") must not equal ""
 
         val flatSchema = res.head.schema
         // assert that the result set contains fields of non-trivial types
@@ -404,11 +404,11 @@ class SapSparkDatasourceIntegrationSpec
         // no un-flattened columns are left in the payload
         flatBapiSchema.fields.filter(_.dataType.isInstanceOf[StructType]) must be(empty)
         // there are non-trivial types in the flattened payload
-        flatBapiSchema.fields.filterNot(_.dataType == StringType) must not be (empty)
+        flatBapiSchema.fields.filterNot(_.dataType == StringType) must not be empty
 
         val res = flattenedDF.collect()
         res.length mustBe 1
-        res.head.mkString("") must not equal ("")
+        res.head.mkString("") must not equal ""
 
         flatNestedRes mustEqual res
       }
@@ -445,6 +445,57 @@ class SapSparkDatasourceIntegrationSpec
         res.head.schema.fields.map(_.name) must contain allElementsOf expectedCols
       }
 
+    }
+  }
+
+  describe("list BAPIs dataframe") {
+    it("lists information for multiple BAPIs") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.LIST_BAPIS_KEY, """["BAPI_USER_GET_DETAIL", "STFC_CONNECTION"]""")
+          .option(SapDataSource.BAPI_FLATTEN_KEY, "true")
+          .load()
+
+      val expectedCols = Seq("name", "defaultSchemaJson", "dynamicParameters", "dfOptions")
+      sourceDF.schema.fields must contain allElementsOf expectedCols.map(StructField(_, StringType))
+
+      val expectedFuns = Map(
+        "BAPI_USER_GET_DETAIL" -> s"""{"USERNAME":"${username}"}""",
+        "STFC_CONNECTION" -> s"""{"REQUTEXT" : "hello world"}"""
+      )
+
+      val res = sourceDF.as[(String, String, String, String)].collect()
+      res.length mustEqual expectedFuns.size
+
+      res.foreach {
+        case (name, schemaStr, params, dfOptionsStr) =>
+          expectedFuns.contains(name) mustBe true
+          dfOptionsStr must include(name)
+          params must include(SapDataSource.BAPI_OUTPUT_TABLE_KEY)
+            .and(include(SapDataSource.BAPI_ARGS_KEY))
+
+          val expectedFunArg = expectedFuns(name)
+          val repotedSchema = DataType.fromJson(schemaStr)
+          val dfOptions = parse(dfOptionsStr).extract[Map[String, Any]].mapValues(_.toString)
+
+          spark.read
+            .format(format)
+            .options(dfOptions)
+            .option(SapDataSource.BAPI_ARGS_KEY, expectedFunArg)
+            .load()
+            .schema mustEqual repotedSchema
+      }
+    }
+
+    it("fails if a BAPI doesn't exist") {
+      val sourceDF =
+        baseDF
+          .option(SapDataSource.LIST_BAPIS_KEY, """["RFC_READ_TABLE", "BAZINGA"]""")
+          .load()
+
+      val res = Try(sourceDF.collect())
+      res.isFailure mustBe true
+      res.failed.get.getMessage must include("SAP RFC BAZINGA not found")
     }
   }
 }

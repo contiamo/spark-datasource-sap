@@ -6,8 +6,6 @@ import com.sap.conn.jco.{JCoFunction, JCoParameterList}
 import org.apache.spark.sql.types._
 
 import scala.collection.immutable
-import scala.util.Try
-import scala.util.chaining._
 
 class SapTableSchemaReader(partition: Partition, noData: Boolean) extends SapSchemaReader {
   override def jcoOptions: Map[String, String] = partition.jcoOptions
