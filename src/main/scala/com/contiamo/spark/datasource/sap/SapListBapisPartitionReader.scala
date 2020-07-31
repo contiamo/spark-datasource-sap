@@ -24,7 +24,7 @@ class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader 
   private val currentRow = new SpecificInternalRow(schema)
   private val flattenFun =
     if (partition.bapiFlatten) (s: StructType) => flattenSparkSchema(s)._1
-    else identity[StructType](_)
+    else identity[StructType] _
 
   override def next(): Boolean = {
     val hasNext = bapisIter.hasNext
@@ -49,17 +49,6 @@ class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader 
             ~ jcoOptions))
 
       val dynamicParameters = compact(render(Seq(SapDataSource.BAPI_ARGS_KEY, SapDataSource.BAPI_OUTPUT_TABLE_KEY)))
-
-      /*
-      Option(funTemplate.getTableParameterList).foreach { tl =>
-        0.until(tl.getFieldCount).map { i =>
-          val tname = tl.getName(i)
-          val schema = sapMetaDataToSparkSchema(tl.getRecordMetaData(i))
-          println(tname)
-          println(schema.prettyJson)
-        }
-      }
-       */
 
       currentRow.update(0, UTF8String.fromString(bapiName))
       currentRow.update(1, UTF8String.fromString(defaultSchemaJson))
