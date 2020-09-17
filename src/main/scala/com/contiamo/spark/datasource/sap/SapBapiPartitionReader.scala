@@ -4,7 +4,7 @@ import com.contiamo.spark.datasource.sap.SapBapiReader.Partition
 import com.sap.conn.jco.{JCoMetaData, JCoParameterList, JCoRecord}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
-import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.types._
 import org.json4s.JsonAST._
 
@@ -12,7 +12,7 @@ import scala.collection.AbstractIterator
 
 class SapBapiPartitionReader(partition: Partition, schemaOnly: Boolean = false)
     extends SapSchemaReader
-    with InputPartitionReader[InternalRow] {
+    with PartitionReader[InternalRow] {
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
   case class OutputSrc(data: Iterator[JCoRecord], schema: JCoMetaData)

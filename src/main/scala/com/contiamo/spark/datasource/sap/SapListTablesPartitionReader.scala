@@ -1,10 +1,10 @@
 package com.contiamo.spark.datasource.sap
 
 import com.contiamo.spark.datasource.sap.SapListTablesReader.Partition
-import com.sap.conn.jco.{JCoFunction, JCoFunctionTemplate, JCoParameterList}
+import com.sap.conn.jco.JCoFunctionTemplate
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
-import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -12,7 +12,7 @@ import scala.util.chaining._
 
 class SapListTablesPartitionReader(partition: Partition)
     extends SapSchemaReader
-    with InputPartitionReader[InternalRow] {
+    with PartitionReader[InternalRow] {
   import org.json4s.JsonDSL._
   import org.json4s.jackson.JsonMethods._
 
@@ -23,10 +23,7 @@ class SapListTablesPartitionReader(partition: Partition)
     Option(dest.getRepository.getFunctionTemplate(jcoTableReadFunName))
       .getOrElse(throw new RFCNotFoundException(jcoTableReadFunName))
 
-  override val schema: StructType =
-    Seq("name", "schemaJson", "dfOptions")
-      .map(StructField(_, StringType))
-      .pipe(StructType.apply)
+  override val schema: StructType = SapListTablesPartitionReader.schema
 
   private val tablesIter = partition.tables.toIterator
   private val currentRow = new SpecificInternalRow(schema)
@@ -64,4 +61,11 @@ class SapListTablesPartitionReader(partition: Partition)
   override def get(): InternalRow = currentRow
 
   override def close(): Unit = {}
+}
+
+object SapListTablesPartitionReader {
+  val schema: StructType =
+    Seq("name", "schemaJson", "dfOptions")
+      .map(StructField(_, StringType))
+      .pipe(StructType.apply)
 }

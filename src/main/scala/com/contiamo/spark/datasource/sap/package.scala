@@ -1,26 +1,35 @@
 package com.contiamo.spark.datasource
 
 import java.text.SimpleDateFormat
-import java.time.{LocalDateTime, ZoneOffset}
 
-import scala.util.chaining._
 import com.sap.conn.jco.{JCoMetaData, JCoRecord}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReader, PartitionReaderFactory, Scan}
 import org.apache.spark.sql.types.DataTypes._
 import org.apache.spark.sql.types.{DataType, Decimal, DecimalType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.sql.catalyst.InternalRow
-import java.time.format.DateTimeFormatter
-import java.time.LocalDate
-import java.time.LocalTime
-import java.util.TimeZone
 
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.sources.v2.reader.InputPartition
+import scala.util.chaining._
 
 package object sap {
   type OptionsMap = Map[String, String]
-  type SapInputPartition = InputPartition[InternalRow]
+
+  trait SapInputPartition extends InputPartition {
+    def createPartitionReader(): PartitionReader[InternalRow]
+  }
+
+  trait SapScan[P <: SapInputPartition] extends Scan with Batch {
+    val partition: P
+
+    override def planInputPartitions(): Array[InputPartition] = Array(partition)
+
+    override def createReaderFactory(): PartitionReaderFactory =
+      (partition: InputPartition) => partition.asInstanceOf[P].createPartitionReader()
+
+    override def toBatch: Batch = this
+  }
 
   class SapDataSourceException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
     def this(msg: String) = this(msg, null)
