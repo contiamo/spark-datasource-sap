@@ -1,13 +1,14 @@
 import java.sql.Date
 import java.util.{Date => JDate}
 
-import org.scalacheck._
-import Gen._
-import Arbitrary.arbitrary
 import WhereClauseGen.ColumnTemplate
 import org.apache.spark.sql.Column
-import org.apache.spark.sql.types.{DataType, DateType, DecimalType, DoubleType, IntegerType, ShortType, StringType}
+import org.apache.spark.sql.catalyst.util.DateTimeConstants
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen._
+import org.scalacheck._
 
 object WhereClauseGen {
   case class ColumnTemplate(name: String, typ: DataType, realValues: Seq[Any] = Seq.empty) {
@@ -68,10 +69,14 @@ object WhereClauseGen {
      smallest of integral columns as Int, so, when
      we generate, we have to pick the smallest
      */
-    case IntegerType    => posNum[Byte]
-    case DoubleType     => arbitrary[Double]
-    case StringType     => asciiPrintableStr
-    case DateType       => arbitrary[JDate].map(d => new Date(d.getTime))
+    case IntegerType => posNum[Byte]
+    case DoubleType  => arbitrary[Double]
+    case StringType  => asciiPrintableStr
+    case DateType =>
+      arbitrary[JDate]
+        .map(_.getTime)
+        .filter(t => Math.floorDiv(t, DateTimeConstants.MILLIS_PER_DAY) < Int.MaxValue)
+        .map(t => new Date(t))
     case _: DecimalType => arbitrary[BigDecimal]
     case _              => Gen.const(null)
   }
