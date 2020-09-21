@@ -12,6 +12,8 @@ import scala.util.Try
 class SapTableFilters(filters: Array[Filter], schema: StructType) {
   import SapTableFilters._
 
+  def isEmpty: Boolean = filters.isEmpty && schema.fields.isEmpty
+
   private val (pushed_, rejected_) = filters
     .map(SapTableFilter(_, schema))
     .partition(_.whereClauseLines.isRight)

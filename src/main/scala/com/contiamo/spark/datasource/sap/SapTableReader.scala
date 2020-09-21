@@ -1,6 +1,9 @@
 package com.contiamo.spark.datasource.sap
 
+import java.util
+
 import com.contiamo.spark.datasource.sap.SapTableReader.Partition
+import org.apache.spark.sql.connector.catalog.TableCapability
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -13,6 +16,9 @@ class SapTableReader(tableName: String, override val options: OptionsMap)
   private var requiredColumns: Option[StructType] = None
   private var tableFilters: SapTableFilters = SapTableFilters.empty
 
+  private val defaultBuild: SapScan[Partition] = buildNewScan()
+  private def fullSchema = defaultBuild.readSchema()
+
   private val filterPushDownEnabled: Boolean = options
     .get(SapDataSource.TABLE_FILTER_PUSHDOWN_ENABLED_KEY)
     .flatMap(s => Try(s.toBoolean).toOption)
@@ -22,7 +28,7 @@ class SapTableReader(tableName: String, override val options: OptionsMap)
 
   override def pushFilters(filters: Array[Filter]): Array[Filter] = {
     if (filterPushDownEnabled) {
-      tableFilters = SapTableFilters(filters, schema())
+      tableFilters = SapTableFilters(filters, fullSchema)
     }
     filters
   }
@@ -30,14 +36,20 @@ class SapTableReader(tableName: String, override val options: OptionsMap)
 
   override def name(): String = tableName
 
-  override def build(): Scan =
-    new SapScan[Partition] {
-      override val partition =
-        Partition(tableName, requiredColumns, tableFilters.whereClauseLines, tableReadFun, jcoOptions)
+  override def schema(): StructType = fullSchema
 
-      override def readSchema() =
-        new SapTableSchemaReader(partition, noData = true).schema
-    }
+  override def build(): Scan =
+    if (requiredColumns.isEmpty && tableFilters.isEmpty) defaultBuild
+    else buildNewScan()
+
+  private def buildNewScan() = new SapScan[Partition] {
+    override val partition =
+      Partition(tableName, requiredColumns, tableFilters.whereClauseLines, tableReadFun, jcoOptions)
+
+    private lazy val schema = new SapTableSchemaReader(partition, noData = true).schema
+
+    override def readSchema() = schema
+  }
 }
 
 object SapTableReader {
