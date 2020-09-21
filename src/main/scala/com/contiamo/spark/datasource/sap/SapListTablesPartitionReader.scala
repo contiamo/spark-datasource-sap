@@ -10,9 +10,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import scala.util.chaining._
 
-class SapListTablesPartitionReader(partition: Partition)
-    extends SapSchemaReader
-    with PartitionReader[InternalRow] {
+class SapListTablesPartitionReader(partition: Partition) extends SapSchemaReader with PartitionReader[InternalRow] {
   import org.json4s.JsonDSL._
   import org.json4s.jackson.JsonMethods._
 
