@@ -33,8 +33,8 @@ libraryDependencies ++= {
     "org.scalatest" %% "scalatest" % "3.1.1" % "test",
     "org.scalacheck" %% "scalacheck" % "1.14.1" % "test",
     "org.scalatestplus" %% "scalacheck-1-14" % "3.2.0.0" % "test",
-    "org.apache.spark" %% "spark-core" % sparkVersion % Provided withSources(),
-    "org.apache.spark" %% "spark-sql" % sparkVersion % Provided withSources(),
+    "org.apache.spark" %% "spark-core" % sparkVersion % Provided,
+    "org.apache.spark" %% "spark-sql" % sparkVersion % Provided,
     "com.github.bigwheel" %% "util-backports" % "2.1"
   )
 }
