@@ -27,7 +27,7 @@ credentials += sys.env
   .getOrElse(Credentials(Path.userHome / ".ivy2" / ".credentials"))
 
 libraryDependencies ++= {
-  val sparkVersion = "2.4.4"
+  val sparkVersion = "3.0.1"
   Seq(
     "com.typesafe" % "config" % "1.4.0" % "test",
     "org.scalatest" %% "scalatest" % "3.1.1" % "test",

@@ -3,22 +3,19 @@ package com.contiamo.spark.datasource.sap
 import com.contiamo.spark.datasource.sap.SapListBapisReader.Partition
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
-import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.util.chaining._
 
-class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader with InputPartitionReader[InternalRow] {
+class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader with PartitionReader[InternalRow] {
   import org.json4s.JsonDSL._
   import org.json4s.jackson.JsonMethods._
 
   override def jcoOptions: Map[String, String] = partition.jcoOptions
 
-  override def schema: StructType =
-    Seq("name", "defaultSchemaJson", "dynamicParameters", "dfOptions")
-      .map(StructField(_, StringType))
-      .pipe(StructType.apply)
+  override def schema: StructType = SapListBapisPartitionReader.schema
 
   private val bapisIter = partition.bapis.toIterator
   private val currentRow = new SpecificInternalRow(schema)
@@ -62,4 +59,11 @@ class SapListBapisPartitionReader(partition: Partition) extends SapSchemaReader 
   override def get(): InternalRow = currentRow
 
   override def close(): Unit = {}
+}
+
+object SapListBapisPartitionReader {
+  val schema: StructType =
+    Seq("name", "defaultSchemaJson", "dynamicParameters", "dfOptions")
+      .map(StructField(_, StringType))
+      .pipe(StructType.apply)
 }

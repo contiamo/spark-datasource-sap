@@ -1,15 +1,17 @@
 package com.contiamo.spark.datasource.sap
 
 import com.contiamo.spark.datasource.sap.SapListBapisReader.Partition
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
+import org.apache.spark.sql.connector.read.Scan
 
 class SapListBapisReader(bapis: Seq[String], override val options: OptionsMap) extends SapDataSourceBaseReader {
   private val bapiFlatten = options.getOrElse(SapDataSource.BAPI_FLATTEN_KEY, "") == "true"
 
-  private val partition = Partition(bapis, bapiFlatten, jcoOptions)
-  override val partitions = Seq(partition)
-  override def schemaReader = new SapListBapisPartitionReader(partition)
+  override def name(): String = SapDataSource.LIST_BAPIS_KEY
+
+  override def build(): Scan = new SapScan[Partition] {
+    override val partition = Partition(bapis, bapiFlatten, jcoOptions)
+    override def readSchema() = SapListBapisPartitionReader.schema
+  }
 }
 
 object SapListBapisReader {
@@ -19,7 +21,7 @@ object SapListBapisReader {
 
   case class Partition(bapis: Seq[String], bapiFlatten: Boolean, jcoOptions: Map[String, String])
       extends SapInputPartition {
-    override def createPartitionReader(): InputPartitionReader[InternalRow] =
+    override def createPartitionReader() =
       new SapListBapisPartitionReader(this)
   }
 

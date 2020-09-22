@@ -1,13 +1,14 @@
 package com.contiamo.spark.datasource.sap
 
-import org.apache.spark.sql.sources.v2.reader._
-import org.apache.spark.sql.sources.v2.{DataSourceOptions, DataSourceV2, ReadSupport}
+import org.apache.spark.sql.connector.catalog.Table
+import org.apache.spark.sql.internal.connector.SimpleTableProvider
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.JavaConverters._
 
-class SapDataSource extends DataSourceV2 with ReadSupport {
-  override def createReader(optionsJava: DataSourceOptions): DataSourceReader = {
-    val options = optionsJava.asMap.asScala.toMap
+class SapDataSource extends SimpleTableProvider {
+  override def getTable(optionsIn: CaseInsensitiveStringMap): Table = {
+    val options = optionsIn.asCaseSensitiveMap().asScala.toMap
 
     SapTableReader(options)
       .orElse(SapBapiReader(options))
@@ -23,7 +24,7 @@ object SapDataSource {
       .filterKeys(_.startsWith("jco."))
       .map(identity) // scala bug workaround (https://github.com/scala/bug/issues/7005)
 
-  val TABLE_KEY = DataSourceOptions.TABLE_KEY
+  val TABLE_KEY = "table"
   val TABLE_READ_FUN_KEY = "table-read-function"
   val TABLE_FILTER_PUSHDOWN_ENABLED_KEY = "table-read-filter-pushdown"
   val LIST_TABLES_KEY = "list-tables-like"
