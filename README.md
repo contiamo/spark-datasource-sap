@@ -11,7 +11,7 @@ system (there isn't right now).
 This was a POC project, here is what it can do:
 
 - Retrieve schemas for a list of tables
-- Read a table using `RFC_READ_TABLE` (within its the limitations)
+- Read a table using `RFC_READ_TABLE` (within its limitations)
   - Allows configuring an alternative read table function
   - Some filter expressions from `where` clause could be pused down
 - Call a BAPI and return selected export parameters or tables
@@ -36,8 +36,3 @@ For usage examples see `src/test/scala/SapSparkDatasourceIntegrationSpec.scala`.
 - Run `sbt test`
 - Some tests relied on the contents of the test SAP system we had access to.
 
-## Publishing a release
-
-Snapshot releases are published automatically upon PR merge. 
-In order to publish a full release, you need to tag a commit on 
-`master` then create a GH release.
